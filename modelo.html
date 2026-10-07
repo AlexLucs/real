@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Quanto vale o Real</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;800&family=IBM+Plex+Mono:wght@400;600&display=swap">
+<style>
+body{margin:0;font:14px system-ui;}img{max-width:100%}[hidden]{display:none!important}
+
+/* Layout: cedula encolhendo no topo, controles de periodo, curva embaixo */
+:root{
+  --bg:#f3f1ea; --surface:#fffdf7; --ink:#1c1a15; --muted:#6e6a5d;
+  --line:#ded9c9; --note:#2f6b4f; --note-2:#8fb79a; --note-ink:#e8f0e4; --alert:#a8422c;
+  --display:"Archivo",system-ui,sans-serif; --mono:"IBM Plex Mono",ui-monospace,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#13140f; --surface:#1c1e18; --ink:#eceade; --muted:#9a9686;
+  --line:#32352b; --note:#3f8a65; --note-2:#6c9c7e; --note-ink:#f0f6ec; --alert:#d4745a;
+  color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#13140f; --surface:#1c1e18; --ink:#eceade; --muted:#9a9686;
+  --line:#32352b; --note:#3f8a65; --note-2:#6c9c7e; --note-ink:#f0f6ec; --alert:#d4745a;
+  color-scheme:dark}
+
+body{background:var(--bg);color:var(--ink);font-family:var(--display);margin:0}
+.wrap{max-width:900px;margin:0 auto;padding-inline:20px;padding-block:28px 48px;
+  display:flex;flex-direction:column;gap:26px}
+h1{font-size:clamp(26px,5vw,40px);font-weight:800;letter-spacing:-.02em;margin:0;text-wrap:balance}
+.sub{color:var(--muted);font-size:15px;margin:6px 0 0;max-width:62ch;line-height:1.5}
+
+.stage{background:var(--surface);border:1px solid var(--line);border-radius:14px;
+  padding:22px 20px 18px;display:flex;flex-direction:column;gap:16px}
+.notes{display:flex;align-items:flex-end;justify-content:center;gap:clamp(14px,5vw,48px);
+  min-height:200px;flex-wrap:wrap}
+.slot{display:flex;flex-direction:column;align-items:center;gap:10px;min-width:0}
+.slot svg{display:block;max-width:100%;transition:width .5s cubic-bezier(.3,.9,.3,1),height .5s cubic-bezier(.3,.9,.3,1)}
+.cap{font-family:var(--mono);font-size:12px;color:var(--muted);text-align:center;line-height:1.4}
+.cap b{display:block;font-size:14px;color:var(--ink);font-weight:600;letter-spacing:.02em}
+.verdict{text-align:center;font-size:clamp(17px,3.2vw,22px);line-height:1.45;margin:0;text-wrap:balance}
+.verdict strong{color:var(--alert);font-variant-numeric:tabular-nums}
+
+.controls{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end}
+.field{display:flex;flex-direction:column;gap:5px;min-width:0;flex:1 1 150px}
+label{font-size:11px;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);font-weight:600}
+select{font:600 14px var(--mono);color:var(--ink);background:var(--surface);
+  border:1px solid var(--line);border-radius:8px;padding:9px 10px;width:100%}
+.presets{display:flex;flex-wrap:wrap;gap:8px}
+button{font:600 12px var(--mono);color:var(--muted);background:transparent;
+  border:1px solid var(--line);border-radius:999px;padding:7px 13px;cursor:pointer}
+button:hover{color:var(--ink);border-color:var(--muted)}
+button[aria-pressed="true"]{background:var(--note);border-color:var(--note);color:var(--note-ink)}
+:focus-visible{outline:2px solid var(--note);outline-offset:2px}
+
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:1px;
+  background:var(--line);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.stat{background:var(--surface);padding:13px 15px}
+.stat span{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+.stat strong{display:block;font:600 21px/1.2 var(--mono);margin-top:4px;font-variant-numeric:tabular-nums}
+.chartbox{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px}
+.chartbox svg{display:block;width:100%;height:auto}
+footer{color:var(--muted);font-size:12.5px;line-height:1.6}
+@media (prefers-reduced-motion:reduce){.slot svg{transition:none}}
+</style>
+</head>
+<body>
+
+
+<div class="wrap">
+<header>
+  <h1>Quanto vale o Real</h1>
+  <p class="sub">Cada nota abaixo tem a área proporcional ao poder de compra. A da esquerda é o dinheiro no início do período; a da direita, o que sobrou dele no fim. Série do IPCA, julho de 1994 em diante.</p>
+</header>
+
+<section class="stage">
+  <div class="notes">
+    <div class="slot"><div id="noteA"></div><p class="cap"><b id="labA">—</b><span id="valA">—</span></p></div>
+    <div class="slot"><div id="noteB"></div><p class="cap"><b id="labB">—</b><span id="valB">—</span></p></div>
+  </div>
+  <p class="verdict" id="verdict"></p>
+</section>
+
+<section class="controls">
+  <div class="field"><label for="ini">Início</label><select id="ini"></select></div>
+  <div class="field"><label for="fim">Fim</label><select id="fim"></select></div>
+</section>
+<div class="presets" id="presets"></div>
+
+<div class="stats">
+  <div class="stat"><span>Poder de compra</span><strong id="sPod">—</strong></div>
+  <div class="stat"><span>Inflação no período</span><strong id="sInf">—</strong></div>
+  <div class="stat"><span>Duração</span><strong id="sDur">—</strong></div>
+  <div class="stat"><span>Média ao ano</span><strong id="sAno">—</strong></div>
+</div>
+
+<div class="chartbox"><div id="chart"></div></div>
+
+<footer>Fonte: IPCA / IBGE, via série 433 do SGS do Banco Central. Último mês disponível: <span id="ult"></span>. O índice usado é o número-índice da planilha, base julho/1994 = 915,93.</footer>
+</div>
+
+<script>
+const S = /*__SERIE__*/[];
+
+const MES=["janeiro","fevereiro","março","abril","maio","junho","julho","agosto","setembro","outubro","novembro","dezembro"];
+const fmt=n=>n.toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2});
+const rotulo=c=>MES[c%100-1]+" de "+Math.floor(c/100);
+const curto=c=>String(c%100).padStart(2,"0")+"/"+Math.floor(c/100);
+
+const sel=(el,def)=>{el.innerHTML=S.map(([c])=>`<option value="${c}">${rotulo(c)}</option>`).join("");el.value=def;};
+const $=id=>document.getElementById(id);
+sel($("ini"),S[0][0]); sel($("fim"),S[S.length-1][0]);
+$("ult").textContent=rotulo(S[S.length-1][0]);
+
+const idx=c=>S.findIndex(r=>r[0]===c);
+
+function guilloche(cx,cy,r,voltas,petalas,w,op){
+  let d="";
+  for(let k=0;k<voltas;k++){
+    const rr=r-k*(r/voltas)*0.42;
+    let p="";
+    for(let i=0;i<=240;i++){
+      const t=i/240*Math.PI*2;
+      const rad=rr*(1+0.17*Math.sin(petalas*t+k*0.55));
+      p+=`${i?"L":"M"}${(cx+rad*Math.cos(t)).toFixed(1)} ${(cy+rad*Math.sin(t)*0.92).toFixed(1)}`;
+    }
+    d+=`<path d="${p}Z" fill="none" stroke="var(--note-2)" stroke-width="${w}" opacity="${op}"/>`;
+  }
+  return d;
+}
+function ondas(x,y,w,h,linhas){
+  let d="";
+  for(let k=0;k<linhas;k++){
+    const yy=y+k*(h/linhas);
+    let p=`M${x} ${yy.toFixed(1)}`;
+    for(let i=1;i<=28;i++){
+      const xx=x+i*(w/28);
+      p+=`L${xx.toFixed(1)} ${(yy+Math.sin(i/2.4+k*0.6)*2.6).toFixed(1)}`;
+    }
+    d+=`<path d="${p}" fill="none" stroke="var(--note-2)" stroke-width=".7" opacity=".45"/>`;
+  }
+  return d;
+}
+
+function nota(ratio,valor,dim){
+  const W=300,H=136;
+  const s=Math.max(Math.sqrt(ratio),0.045);
+  const w=Math.round(W*s), h=Math.round(H*s);
+  const id=dim?"b":"a";
+  // nota.jpg: a cedula ocupa o arquivo inteiro, sem margem a recortar
+  const IW=W, IH=H-6, IX=0, IY=2;
+  return `<svg viewBox="0 0 ${W} ${H}" width="${w}" height="${h}" role="img" aria-label="Cedula representando R$ ${fmt(valor)}">
+    <defs><clipPath id="cp${id}"><rect x="3" y="3" width="${W-6}" height="${H-6}" rx="8"/></clipPath></defs>
+    <g clip-path="url(#cp${id})">
+      <image href="nota.jpg" xlink:href="nota.jpg" x="${IX.toFixed(1)}" y="${IY.toFixed(1)}"
+             width="${IW.toFixed(1)}" height="${IH.toFixed(1)}" preserveAspectRatio="none"/>
+    </g>
+    <rect x="3" y="3" width="${W-6}" height="${H-6}" rx="8" fill="none"
+      stroke="${dim?"var(--alert)":"var(--note-2)"}" stroke-width="3"/>
+  </svg>`;
+}
+
+function grafico(a,b){
+  const W=860,H=230,L=52,R=14,T=16,B=30;
+  const pts=S.slice(a,b+1);
+  const base=pts[0][1];
+  const n=pts.length;
+  const x=i=>L+(W-L-R)*(n===1?0:i/(n-1));
+  const y=v=>T+(H-T-B)*(1-v);
+  const vals=pts.map(p=>base/p[1]);
+  const min=Math.min(...vals);
+  const d=vals.map((v,i)=>`${i?"L":"M"}${x(i).toFixed(1)} ${y(v).toFixed(1)}`).join(" ");
+  const area=d+` L${x(n-1).toFixed(1)} ${y(0)} L${x(0).toFixed(1)} ${y(0)} Z`;
+  let grid="",ticks=[0,.25,.5,.75,1];
+  if(min>.6) ticks=[.6,.7,.8,.9,1];
+  for(const t of ticks){
+    grid+=`<line x1="${L}" y1="${y(t)}" x2="${W-R}" y2="${y(t)}" stroke="var(--line)" stroke-width="1"/>
+      <text x="${L-8}" y="${y(t)+4}" text-anchor="end" fill="var(--muted)" font-family="IBM Plex Mono,monospace" font-size="11">${Math.round(t*100)}%</text>`;
+  }
+  const marcas=n>1?[0,Math.floor((n-1)/2),n-1]:[0];
+  const eixo=marcas.map(i=>`<text x="${x(i).toFixed(1)}" y="${H-8}" text-anchor="${i===0?"start":i===n-1?"end":"middle"}" fill="var(--muted)" font-family="IBM Plex Mono,monospace" font-size="11">${curto(pts[i][0])}</text>`).join("");
+  return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" style="height:230px;width:100%">
+    <defs>
+      <clipPath id="recorteArea"><path d="${area}"/></clipPath>
+    </defs>
+    ${grid}
+    <image href="nota.jpg" xlink:href="nota.jpg"
+           x="${L}" y="${T}" width="${W-L-R}" height="${H-T-B}"
+           preserveAspectRatio="xMinYMid slice" clip-path="url(#recorteArea)" opacity="1"/>
+    <path d="${d}" fill="none" stroke="var(--alert)" stroke-width="2.5" stroke-linejoin="round"/>
+    <circle cx="${x(n-1).toFixed(1)}" cy="${y(vals[n-1]).toFixed(1)}" r="4.5" fill="var(--alert)"/>
+    ${eixo}
+  </svg>`;
+}
+
+function render(){
+  let a=idx(+$("ini").value), b=idx(+$("fim").value);
+  if(a>b){[a,b]=[b,a];$("ini").value=S[a][0];$("fim").value=S[b][0];}
+  const ia=S[a][1], ib=S[b][1];
+  const pod=ia/ib;                       // poder de compra restante
+  const infl=(ib/ia-1)*100;              // inflação acumulada
+  const meses=(Math.floor(S[b][0]/100)*12+S[b][0]%100)-(Math.floor(S[a][0]/100)*12+S[a][0]%100);
+  const anos=meses/12;
+  const aa=anos>0?(Math.pow(ib/ia,1/anos)-1)*100:0;
+
+  $("noteA").innerHTML=nota(1,100,false);
+  $("noteB").innerHTML=nota(pod,100*pod,true);
+  $("labA").textContent=rotulo(S[a][0]); $("valA").textContent="R$ 100,00";
+  $("labB").textContent=rotulo(S[b][0]); $("valB").textContent="poder de R$ "+fmt(100*pod);
+
+  $("verdict").innerHTML=`R$ 100,00 de ${rotulo(S[a][0])} compram em ${rotulo(S[b][0])} o mesmo que <strong>R$ ${fmt(100*pod)}</strong> compravam lá atrás.`;
+  $("sPod").textContent=fmt(pod*100)+"%";
+  $("sInf").textContent=(infl>=0?"+":"")+fmt(infl)+"%";
+  $("sDur").textContent=meses<24?meses+" meses":fmt(anos).replace(",00","")+" anos";
+  $("sAno").textContent=meses?(aa>=0?"+":"")+fmt(aa)+"%":"—";
+  $("chart").innerHTML=grafico(a,b);
+  marcarPreset();
+}
+
+/* presets de período */
+const ULT=S[S.length-1][0];
+const recua=m=>{let t=Math.floor(ULT/100)*12+ULT%100-m;return Math.floor((t-1)/12)*100+((t-1)%12+1);};
+const PRESETS=[
+  ["12 meses",()=>[recua(12),ULT]],
+  ["2 anos",()=>[recua(24),ULT]],
+  ["5 anos",()=>[recua(60),ULT]],
+  ["10 anos",()=>[recua(120),ULT]],
+  ["20 anos",()=>[recua(240),ULT]],
+  ["30 anos",()=>[recua(360),ULT]],
+  ["Desde o Plano Real",()=>[S[0][0],ULT]],
+];
+$("presets").innerHTML=PRESETS.map((p,i)=>`<button type="button" data-i="${i}" aria-pressed="false">${p[0]}</button>`).join("");
+$("presets").addEventListener("click",e=>{
+  const b=e.target.closest("button"); if(!b) return;
+  const [i,f]=PRESETS[+b.dataset.i][1]();
+  $("ini").value=(idx(i)>=0?i:S[0][0]); $("fim").value=f; render();
+});
+function marcarPreset(){
+  const atual=[+$("ini").value,+$("fim").value];
+  document.querySelectorAll("#presets button").forEach((b,k)=>{
+    const [i,f]=PRESETS[k][1]();
+    b.setAttribute("aria-pressed", String((idx(i)>=0?i:S[0][0])===atual[0] && f===atual[1]));
+  });
+}
+$("ini").addEventListener("change",render);
+$("fim").addEventListener("change",render);
+render();
+</script>
+
+</body>
+</html>

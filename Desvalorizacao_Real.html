@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Quanto vale o Real</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;800&family=IBM+Plex+Mono:wght@400;600&display=swap">
+<style>
+body{margin:0;font:14px system-ui;}img{max-width:100%}[hidden]{display:none!important}
+
+/* Layout: cedula encolhendo no topo, controles de periodo, curva embaixo */
+:root{
+  --bg:#f3f1ea; --surface:#fffdf7; --ink:#1c1a15; --muted:#6e6a5d;
+  --line:#ded9c9; --note:#2f6b4f; --note-2:#8fb79a; --note-ink:#e8f0e4; --alert:#a8422c;
+  --display:"Archivo",system-ui,sans-serif; --mono:"IBM Plex Mono",ui-monospace,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#13140f; --surface:#1c1e18; --ink:#eceade; --muted:#9a9686;
+  --line:#32352b; --note:#3f8a65; --note-2:#6c9c7e; --note-ink:#f0f6ec; --alert:#d4745a;
+  color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#13140f; --surface:#1c1e18; --ink:#eceade; --muted:#9a9686;
+  --line:#32352b; --note:#3f8a65; --note-2:#6c9c7e; --note-ink:#f0f6ec; --alert:#d4745a;
+  color-scheme:dark}
+
+body{background:var(--bg);color:var(--ink);font-family:var(--display);margin:0}
+.wrap{max-width:900px;margin:0 auto;padding-inline:20px;padding-block:28px 48px;
+  display:flex;flex-direction:column;gap:26px}
+h1{font-size:clamp(26px,5vw,40px);font-weight:800;letter-spacing:-.02em;margin:0;text-wrap:balance}
+.sub{color:var(--muted);font-size:15px;margin:6px 0 0;max-width:62ch;line-height:1.5}
+
+.stage{background:var(--surface);border:1px solid var(--line);border-radius:14px;
+  padding:22px 20px 18px;display:flex;flex-direction:column;gap:16px}
+.notes{display:flex;align-items:flex-end;justify-content:center;gap:clamp(14px,5vw,48px);
+  min-height:200px;flex-wrap:wrap}
+.slot{display:flex;flex-direction:column;align-items:center;gap:10px;min-width:0}
+.slot svg{display:block;max-width:100%;transition:width .5s cubic-bezier(.3,.9,.3,1),height .5s cubic-bezier(.3,.9,.3,1)}
+.cap{font-family:var(--mono);font-size:12px;color:var(--muted);text-align:center;line-height:1.4}
+.cap b{display:block;font-size:14px;color:var(--ink);font-weight:600;letter-spacing:.02em}
+.verdict{text-align:center;font-size:clamp(17px,3.2vw,22px);line-height:1.45;margin:0;text-wrap:balance}
+.verdict strong{color:var(--alert);font-variant-numeric:tabular-nums}
+
+.controls{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end}
+.field{display:flex;flex-direction:column;gap:5px;min-width:0;flex:1 1 150px}
+label{font-size:11px;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);font-weight:600}
+select{font:600 14px var(--mono);color:var(--ink);background:var(--surface);
+  border:1px solid var(--line);border-radius:8px;padding:9px 10px;width:100%}
+.presets{display:flex;flex-wrap:wrap;gap:8px}
+button{font:600 12px var(--mono);color:var(--muted);background:transparent;
+  border:1px solid var(--line);border-radius:999px;padding:7px 13px;cursor:pointer}
+button:hover{color:var(--ink);border-color:var(--muted)}
+button[aria-pressed="true"]{background:var(--note);border-color:var(--note);color:var(--note-ink)}
+:focus-visible{outline:2px solid var(--note);outline-offset:2px}
+
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:1px;
+  background:var(--line);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.stat{background:var(--surface);padding:13px 15px}
+.stat span{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+.stat strong{display:block;font:600 21px/1.2 var(--mono);margin-top:4px;font-variant-numeric:tabular-nums}
+.chartbox{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px}
+.chartbox svg{display:block;width:100%;height:auto}
+footer{color:var(--muted);font-size:12.5px;line-height:1.6}
+@media (prefers-reduced-motion:reduce){.slot svg{transition:none}}
+</style>
+</head>
+<body>
+
+
+<div class="wrap">
+<header>
+  <h1>Quanto vale o Real</h1>
+  <p class="sub">Cada nota abaixo tem a área proporcional ao poder de compra. A da esquerda é o dinheiro no início do período; a da direita, o que sobrou dele no fim. Série do IPCA, julho de 1994 em diante.</p>
+</header>
+
+<section class="stage">
+  <div class="notes">
+    <div class="slot"><div id="noteA"></div><p class="cap"><b id="labA">—</b><span id="valA">—</span></p></div>
+    <div class="slot"><div id="noteB"></div><p class="cap"><b id="labB">—</b><span id="valB">—</span></p></div>
+  </div>
+  <p class="verdict" id="verdict"></p>
+</section>
+
+<section class="controls">
+  <div class="field"><label for="ini">Início</label><select id="ini"></select></div>
+  <div class="field"><label for="fim">Fim</label><select id="fim"></select></div>
+</section>
+<div class="presets" id="presets"></div>
+
+<div class="stats">
+  <div class="stat"><span>Poder de compra</span><strong id="sPod">—</strong></div>
+  <div class="stat"><span>Inflação no período</span><strong id="sInf">—</strong></div>
+  <div class="stat"><span>Duração</span><strong id="sDur">—</strong></div>
+  <div class="stat"><span>Média ao ano</span><strong id="sAno">—</strong></div>
+</div>
+
+<div class="chartbox"><div id="chart"></div></div>
+
+<footer>Fonte: IPCA / IBGE, via série 433 do SGS do Banco Central. Último mês disponível: <span id="ult"></span>. O índice usado é o número-índice da planilha, base julho/1994 = 915,93.</footer>
+</div>
+
+<script>
+const S = /*__SERIE__*/[[199407,915.93],[199408,932.97],[199409,947.24],[199410,972.06],[199411,999.37],[199412,1016.46],[199501,1033.74],[199502,1044.28],[199503,1060.47],[199504,1086.24],[199505,1115.24],[199506,1140.44],[199507,1167.35],[199508,1178.91],[199509,1190.58],[199510,1207.37],[199511,1225.12],[199512,1244.23],[199601,1260.9],[199602,1273.89],[199603,1278.35],[199604,1294.46],[199605,1310.25],[199606,1325.84],[199607,1340.56],[199608,1346.46],[199609,1348.48],[199610,1352.53],[199611,1356.86],[199612,1363.24],[199701,1379.33],[199702,1386.23],[199703,1393.3],[199704,1405.56],[199705,1411.32],[199706,1418.94],[199707,1422.06],[199708,1421.78],[199709,1422.63],[199710,1425.9],[199711,1428.32],[199712,1434.46],[199801,1444.64],[199802,1451.29],[199803,1456.22],[199804,1459.71],[199805,1467.01],[199806,1467.3],[199807,1465.54],[199808,1458.07],[199809,1454.86],[199810,1455.15],[199811,1453.4],[199812,1458.2],[199901,1468.41],[199902,1483.83],[199903,1500.15],[199904,1508.55],[199905,1513.08],[199906,1515.95],[199907,1532.47],[199908,1541.05],[199909,1545.83],[199910,1564.23],[199911,1579.09],[199912,1588.56],[200001,1598.41],[200002,1600.49],[200003,1604.01],[200004,1610.75],[200005,1610.91],[200006,1614.62],[200007,1640.62],[200008,1662.11],[200009,1665.93],[200010,1668.26],[200011,1673.6],[200012,1683.47],[200101,1693.07],[200102,1700.86],[200103,1707.32],[200104,1717.22],[200105,1724.26],[200106,1733.23],[200107,1756.28],[200108,1768.57],[200109,1773.52],[200110,1788.24],[200111,1800.94],[200112,1812.65],[200201,1822.08],[200202,1828.64],[200203,1839.61],[200204,1854.33],[200205,1858.22],[200206,1866.02],[200207,1888.23],[200208,1900.5],[200209,1914.18],[200210,1939.26],[200211,1997.83],[200212,2039.78],[200301,2085.68],[200302,2118.43],[200303,2144.49],[200304,2165.29],[200305,2178.5],[200306,2175.23],[200307,2179.58],[200308,2186.99],[200309,2204.05],[200310,2210.44],[200311,2217.96],[200312,2229.49],[200401,2246.43],[200402,2260.13],[200403,2270.75],[200404,2279.15],[200405,2290.77],[200406,2307.03],[200407,2328.02],[200408,2344.08],[200409,2351.82],[200410,2362.17],[200411,2378.47],[200412,2398.92],[200501,2412.83],[200502,2427.07],[200503,2441.87],[200504,2463.11],[200505,2475.18],[200506,2474.68],[200507,2480.87],[200508,2485.09],[200509,2493.79],[200510,2512.49],[200511,2526.31],[200512,2535.4],[200601,2550.36],[200602,2560.82],[200603,2571.83],[200604,2577.23],[200605,2579.81],[200606,2574.39],[200607,2579.28],[200608,2580.57],[200609,2585.99],[200610,2594.52],[200611,2602.56],[200612,2615.05],[200701,2626.56],[200702,2638.12],[200703,2647.88],[200704,2654.5],[200705,2661.93],[200706,2669.38],[200707,2675.79],[200708,2688.37],[200709,2693.21],[200710,2701.29],[200711,2711.55],[200712,2731.62],[200801,2746.37],[200802,2759.83],[200803,2773.08],[200804,2788.33],[200805,2810.36],[200806,2831.16],[200807,2846.16],[200808,2854.13],[200809,2861.55],[200810,2874.43],[200811,2884.78],[200812,2892.86],[200901,2906.74],[200902,2922.73],[200903,2928.57],[200904,2942.63],[200905,2956.46],[200906,2967.1],[200907,2974.22],[200908,2978.68],[200909,2985.83],[200910,2994.19],[200911,3006.47],[200912,3017.59],[201001,3040.22],[201002,3063.93],[201003,3079.86],[201004,3097.42],[201005,3110.74],[201006,3110.74],[201007,3111.05],[201008,3112.29],[201009,3126.29],[201010,3149.74],[201011,3175.88],[201012,3195.89],[201101,3222.42],[201102,3248.2],[201103,3273.86],[201104,3299.07],[201105,3314.58],[201106,3319.55],[201107,3324.86],[201108,3337.16],[201109,3354.85],[201110,3369.28],[201111,3386.8],[201112,3403.73],[201201,3422.79],[201202,3438.19],[201203,3445.41],[201204,3467.46],[201205,3479.94],[201206,3482.72],[201207,3497.7],[201208,3512.04],[201209,3532.06],[201210,3552.9],[201211,3574.22],[201212,3602.46],[201301,3633.44],[201302,3655.24],[201303,3672.42],[201304,3692.62],[201305,3706.28],[201306,3715.92],[201307,3717.03],[201308,3725.95],[201309,3738.99],[201310,3760.3],[201311,3780.61],[201312,3815.39],[201401,3836.37],[201402,3862.84],[201403,3898.38],[201404,3924.5],[201405,3942.55],[201406,3958.32],[201407,3958.72],[201408,3968.62],[201409,3991.24],[201410,4008],[201411,4028.44],[201412,4059.86],[201501,4110.2],[201502,4160.34],[201503,4215.26],[201504,4245.19],[201505,4276.6],[201506,4310.39],[201507,4337.11],[201508,4346.65],[201509,4370.12],[201510,4405.95],[201511,4450.45],[201512,4493.17],[201601,4550.23],[201602,4591.18],[201603,4610.92],[201604,4639.05],[201605,4675.23],[201606,4691.59],[201607,4715.99],[201608,4736.74],[201609,4740.53],[201610,4752.86],[201611,4761.42],[201612,4775.7],[201701,4793.85],[201702,4809.67],[201703,4821.69],[201704,4828.44],[201705,4843.41],[201706,4832.27],[201707,4843.87],[201708,4853.07],[201709,4860.83],[201710,4881.25],[201711,4894.92],[201712,4916.46],[201801,4930.72],[201802,4946.5],[201803,4950.95],[201804,4961.84],[201805,4981.69],[201806,5044.46],[201807,5061.11],[201808,5056.56],[201809,5080.83],[201810,5103.69],[201811,5092.97],[201812,5100.61],[201901,5116.93],[201902,5138.93],[201903,5177.47],[201904,5206.98],[201905,5213.75],[201906,5214.27],[201907,5224.18],[201908,5229.93],[201909,5227.84],[201910,5233.07],[201911,5259.76],[201912,5320.25],[202001,5331.42],[202002,5344.75],[202003,5348.49],[202004,5331.91],[202005,5311.65],[202006,5325.46],[202007,5344.63],[202008,5357.46],[202009,5391.75],[202010,5438.12],[202011,5486.52],[202012,5560.59],[202101,5574.49],[202102,5622.43],[202103,5674.72],[202104,5692.31],[202105,5739.56],[202106,5769.98],[202107,5825.37],[202108,5876.05],[202109,5944.21],[202110,6018.51],[202111,6075.69],[202112,6120.04],[202201,6153.09],[202202,6215.24],[202203,6315.93],[202204,6382.88],[202205,6412.88],[202206,6455.85],[202207,6411.95],[202208,6388.87],[202209,6370.34],[202210,6407.93],[202211,6434.2],[202212,6474.09],[202301,6508.4],[202302,6563.07],[202303,6609.67],[202304,6649.99],[202305,6665.28],[202306,6659.95],[202307,6667.94],[202308,6683.28],[202309,6700.66],[202310,6716.74],[202311,6735.55],[202312,6773.27],[202401,6801.72],[202402,6858.17],[202403,6869.14],[202404,6895.24],[202405,6926.96],[202406,6941.51],[202407,6967.89],[202408,6966.5],[202409,6997.15],[202410,7036.33],[202411,7063.77],[202412,7100.5],[202501,7111.86],[202502,7205.03],[202503,7245.38],[202504,7276.54],[202505,7295.46],[202506,7312.97],[202507,7331.98],[202508,7323.91],[202509,7359.06],[202510,7365.68],[202511,7378.94],[202512,7403.29],[202601,7427.72],[202602,7479.71],[202603,7545.53],[202604,7596.09],[202605,7640.15],[202606,7652.37],[202607,7657.73],[202608,7633.23]];
+
+const MES=["janeiro","fevereiro","março","abril","maio","junho","julho","agosto","setembro","outubro","novembro","dezembro"];
+const fmt=n=>n.toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2});
+const rotulo=c=>MES[c%100-1]+" de "+Math.floor(c/100);
+const curto=c=>String(c%100).padStart(2,"0")+"/"+Math.floor(c/100);
+
+const sel=(el,def)=>{el.innerHTML=S.map(([c])=>`<option value="${c}">${rotulo(c)}</option>`).join("");el.value=def;};
+const $=id=>document.getElementById(id);
+sel($("ini"),S[0][0]); sel($("fim"),S[S.length-1][0]);
+$("ult").textContent=rotulo(S[S.length-1][0]);
+
+const idx=c=>S.findIndex(r=>r[0]===c);
+
+function guilloche(cx,cy,r,voltas,petalas,w,op){
+  let d="";
+  for(let k=0;k<voltas;k++){
+    const rr=r-k*(r/voltas)*0.42;
+    let p="";
+    for(let i=0;i<=240;i++){
+      const t=i/240*Math.PI*2;
+      const rad=rr*(1+0.17*Math.sin(petalas*t+k*0.55));
+      p+=`${i?"L":"M"}${(cx+rad*Math.cos(t)).toFixed(1)} ${(cy+rad*Math.sin(t)*0.92).toFixed(1)}`;
+    }
+    d+=`<path d="${p}Z" fill="none" stroke="var(--note-2)" stroke-width="${w}" opacity="${op}"/>`;
+  }
+  return d;
+}
+function ondas(x,y,w,h,linhas){
+  let d="";
+  for(let k=0;k<linhas;k++){
+    const yy=y+k*(h/linhas);
+    let p=`M${x} ${yy.toFixed(1)}`;
+    for(let i=1;i<=28;i++){
+      const xx=x+i*(w/28);
+      p+=`L${xx.toFixed(1)} ${(yy+Math.sin(i/2.4+k*0.6)*2.6).toFixed(1)}`;
+    }
+    d+=`<path d="${p}" fill="none" stroke="var(--note-2)" stroke-width=".7" opacity=".45"/>`;
+  }
+  return d;
+}
+
+function nota(ratio,valor,dim){
+  const W=300,H=136;
+  const s=Math.max(Math.sqrt(ratio),0.045);
+  const w=Math.round(W*s), h=Math.round(H*s);
+  const id=dim?"b":"a";
+  // nota.jpg: a cedula ocupa o arquivo inteiro, sem margem a recortar
+  const IW=W, IH=H-6, IX=0, IY=2;
+  return `<svg viewBox="0 0 ${W} ${H}" width="${w}" height="${h}" role="img" aria-label="Cedula representando R$ ${fmt(valor)}">
+    <defs><clipPath id="cp${id}"><rect x="3" y="3" width="${W-6}" height="${H-6}" rx="8"/></clipPath></defs>
+    <g clip-path="url(#cp${id})">
+      <image href="nota.jpg" xlink:href="nota.jpg" x="${IX.toFixed(1)}" y="${IY.toFixed(1)}"
+             width="${IW.toFixed(1)}" height="${IH.toFixed(1)}" preserveAspectRatio="none"/>
+    </g>
+    <rect x="3" y="3" width="${W-6}" height="${H-6}" rx="8" fill="none"
+      stroke="${dim?"var(--alert)":"var(--note-2)"}" stroke-width="3"/>
+  </svg>`;
+}
+
+function grafico(a,b){
+  const W=860,H=230,L=52,R=14,T=16,B=30;
+  const pts=S.slice(a,b+1);
+  const base=pts[0][1];
+  const n=pts.length;
+  const x=i=>L+(W-L-R)*(n===1?0:i/(n-1));
+  const y=v=>T+(H-T-B)*(1-v);
+  const vals=pts.map(p=>base/p[1]);
+  const min=Math.min(...vals);
+  const d=vals.map((v,i)=>`${i?"L":"M"}${x(i).toFixed(1)} ${y(v).toFixed(1)}`).join(" ");
+  const area=d+` L${x(n-1).toFixed(1)} ${y(0)} L${x(0).toFixed(1)} ${y(0)} Z`;
+  let grid="",ticks=[0,.25,.5,.75,1];
+  if(min>.6) ticks=[.6,.7,.8,.9,1];
+  for(const t of ticks){
+    grid+=`<line x1="${L}" y1="${y(t)}" x2="${W-R}" y2="${y(t)}" stroke="var(--line)" stroke-width="1"/>
+      <text x="${L-8}" y="${y(t)+4}" text-anchor="end" fill="var(--muted)" font-family="IBM Plex Mono,monospace" font-size="11">${Math.round(t*100)}%</text>`;
+  }
+  const marcas=n>1?[0,Math.floor((n-1)/2),n-1]:[0];
+  const eixo=marcas.map(i=>`<text x="${x(i).toFixed(1)}" y="${H-8}" text-anchor="${i===0?"start":i===n-1?"end":"middle"}" fill="var(--muted)" font-family="IBM Plex Mono,monospace" font-size="11">${curto(pts[i][0])}</text>`).join("");
+  return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" style="height:230px;width:100%">
+    <defs>
+      <clipPath id="recorteArea"><path d="${area}"/></clipPath>
+    </defs>
+    ${grid}
+    <image href="nota.jpg" xlink:href="nota.jpg"
+           x="${L}" y="${T}" width="${W-L-R}" height="${H-T-B}"
+           preserveAspectRatio="xMinYMid slice" clip-path="url(#recorteArea)" opacity="1"/>
+    <path d="${d}" fill="none" stroke="var(--alert)" stroke-width="2.5" stroke-linejoin="round"/>
+    <circle cx="${x(n-1).toFixed(1)}" cy="${y(vals[n-1]).toFixed(1)}" r="4.5" fill="var(--alert)"/>
+    ${eixo}
+  </svg>`;
+}
+
+function render(){
+  let a=idx(+$("ini").value), b=idx(+$("fim").value);
+  if(a>b){[a,b]=[b,a];$("ini").value=S[a][0];$("fim").value=S[b][0];}
+  const ia=S[a][1], ib=S[b][1];
+  const pod=ia/ib;                       // poder de compra restante
+  const infl=(ib/ia-1)*100;              // inflação acumulada
+  const meses=(Math.floor(S[b][0]/100)*12+S[b][0]%100)-(Math.floor(S[a][0]/100)*12+S[a][0]%100);
+  const anos=meses/12;
+  const aa=anos>0?(Math.pow(ib/ia,1/anos)-1)*100:0;
+
+  $("noteA").innerHTML=nota(1,100,false);
+  $("noteB").innerHTML=nota(pod,100*pod,true);
+  $("labA").textContent=rotulo(S[a][0]); $("valA").textContent="R$ 100,00";
+  $("labB").textContent=rotulo(S[b][0]); $("valB").textContent="poder de R$ "+fmt(100*pod);
+
+  $("verdict").innerHTML=`R$ 100,00 de ${rotulo(S[a][0])} compram em ${rotulo(S[b][0])} o mesmo que <strong>R$ ${fmt(100*pod)}</strong> compravam lá atrás.`;
+  $("sPod").textContent=fmt(pod*100)+"%";
+  $("sInf").textContent=(infl>=0?"+":"")+fmt(infl)+"%";
+  $("sDur").textContent=meses<24?meses+" meses":fmt(anos).replace(",00","")+" anos";
+  $("sAno").textContent=meses?(aa>=0?"+":"")+fmt(aa)+"%":"—";
+  $("chart").innerHTML=grafico(a,b);
+  marcarPreset();
+}
+
+/* presets de período */
+const ULT=S[S.length-1][0];
+const recua=m=>{let t=Math.floor(ULT/100)*12+ULT%100-m;return Math.floor((t-1)/12)*100+((t-1)%12+1);};
+const PRESETS=[
+  ["12 meses",()=>[recua(12),ULT]],
+  ["2 anos",()=>[recua(24),ULT]],
+  ["5 anos",()=>[recua(60),ULT]],
+  ["10 anos",()=>[recua(120),ULT]],
+  ["20 anos",()=>[recua(240),ULT]],
+  ["30 anos",()=>[recua(360),ULT]],
+  ["Desde o Plano Real",()=>[S[0][0],ULT]],
+];
+$("presets").innerHTML=PRESETS.map((p,i)=>`<button type="button" data-i="${i}" aria-pressed="false">${p[0]}</button>`).join("");
+$("presets").addEventListener("click",e=>{
+  const b=e.target.closest("button"); if(!b) return;
+  const [i,f]=PRESETS[+b.dataset.i][1]();
+  $("ini").value=(idx(i)>=0?i:S[0][0]); $("fim").value=f; render();
+});
+function marcarPreset(){
+  const atual=[+$("ini").value,+$("fim").value];
+  document.querySelectorAll("#presets button").forEach((b,k)=>{
+    const [i,f]=PRESETS[k][1]();
+    b.setAttribute("aria-pressed", String((idx(i)>=0?i:S[0][0])===atual[0] && f===atual[1]));
+  });
+}
+$("ini").addEventListener("change",render);
+$("fim").addEventListener("change",render);
+render();
+</script>
+
+</body>
+</html>
