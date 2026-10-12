@@ -1,0 +1,46 @@
+name: Atualizar IPCA
+
+on:
+  schedule:
+    # 12:00 UTC (09:00 em Brasília) nos dias 9 a 14 de cada mês.
+    # O IBGE divulga o IPCA por volta do dia 10; a janela cobre atrasos.
+    - cron: '0 12 9-14 * *'
+  workflow_dispatch:        # permite rodar na mão pela aba Actions
+
+permissions:
+  contents: write           # necessário para o commit de volta
+
+concurrency:
+  group: atualizar-ipca
+  cancel-in-progress: false
+
+jobs:
+  atualizar:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clonar o repositório
+        uses: actions/checkout@v4
+
+      - name: Preparar o Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Rodar o atualizador
+        run: |
+          python atualizar_ipca.py | tee saida.txt
+          python atualizar_ipca.py --so-html --html index.html
+
+      - name: Commitar se algo mudou
+        run: |
+          MES=$(sed -n 's/.*Pagina gerada:.*ate \(.*\))$/\1/p' saida.txt | tail -1)
+          rm -f saida.txt
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "Nada mudou: a série já estava no mês mais recente (${MES})."
+            exit 0
+          fi
+          git config user.name  'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m "IPCA ${MES:-atualizado}"
+          git push
