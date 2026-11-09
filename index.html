@@ -4,8 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Quanto vale o Real</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;800&family=IBM+Plex+Mono:wght@400;600&display=swap">
 <style>
+/* Fontes locais (pasta fonts/, licença SIL OFL) para a página funcionar offline */
+@font-face{font-family:"Archivo";font-weight:500;font-display:swap;src:url(fonts/archivo-latin-500-normal.woff2) format("woff2")}
+@font-face{font-family:"Archivo";font-weight:600;font-display:swap;src:url(fonts/archivo-latin-600-normal.woff2) format("woff2")}
+@font-face{font-family:"Archivo";font-weight:800;font-display:swap;src:url(fonts/archivo-latin-800-normal.woff2) format("woff2")}
+@font-face{font-family:"IBM Plex Mono";font-weight:400;font-display:swap;src:url(fonts/ibm-plex-mono-latin-400-normal.woff2) format("woff2")}
+@font-face{font-family:"IBM Plex Mono";font-weight:600;font-display:swap;src:url(fonts/ibm-plex-mono-latin-600-normal.woff2) format("woff2")}
+
 body{margin:0;font:14px system-ui;}img{max-width:100%}[hidden]{display:none!important}
 
 /* Layout: cedula encolhendo no topo, controles de periodo, curva embaixo */
@@ -95,7 +101,7 @@ footer{color:var(--muted);font-size:12.5px;line-height:1.6}
 
 <div class="chartbox"><div id="chart"></div></div>
 
-<footer>Fonte: IPCA / IBGE, via série 433 do SGS do Banco Central. Último mês disponível: <span id="ult"></span>. O índice usado é o número-índice da planilha, base julho/1994 = 915,93.</footer>
+<footer>Fonte: IPCA / IBGE, via série 433 do SGS do Banco Central. Último mês disponível: <span id="ult"></span>. O índice usado é o número-índice da planilha, referência julho/1994 = 915,93 (índice com base dezembro/1993 = 100).</footer>
 </div>
 
 <script>
@@ -113,46 +119,19 @@ $("ult").textContent=rotulo(S[S.length-1][0]);
 
 const idx=c=>S.findIndex(r=>r[0]===c);
 
-function guilloche(cx,cy,r,voltas,petalas,w,op){
-  let d="";
-  for(let k=0;k<voltas;k++){
-    const rr=r-k*(r/voltas)*0.42;
-    let p="";
-    for(let i=0;i<=240;i++){
-      const t=i/240*Math.PI*2;
-      const rad=rr*(1+0.17*Math.sin(petalas*t+k*0.55));
-      p+=`${i?"L":"M"}${(cx+rad*Math.cos(t)).toFixed(1)} ${(cy+rad*Math.sin(t)*0.92).toFixed(1)}`;
-    }
-    d+=`<path d="${p}Z" fill="none" stroke="var(--note-2)" stroke-width="${w}" opacity="${op}"/>`;
-  }
-  return d;
-}
-function ondas(x,y,w,h,linhas){
-  let d="";
-  for(let k=0;k<linhas;k++){
-    const yy=y+k*(h/linhas);
-    let p=`M${x} ${yy.toFixed(1)}`;
-    for(let i=1;i<=28;i++){
-      const xx=x+i*(w/28);
-      p+=`L${xx.toFixed(1)} ${(yy+Math.sin(i/2.4+k*0.6)*2.6).toFixed(1)}`;
-    }
-    d+=`<path d="${p}" fill="none" stroke="var(--note-2)" stroke-width=".7" opacity=".45"/>`;
-  }
-  return d;
-}
+// Proporção de nota.jpg (573x253 px). Usada para não distorcer a cédula.
+const NOTA_PROP=253/573;
 
 function nota(ratio,valor,dim){
-  const W=300,H=136;
+  const W=300,H=Math.round(W*NOTA_PROP);   // 300x132: mesma proporção da imagem
   const s=Math.max(Math.sqrt(ratio),0.045);
   const w=Math.round(W*s), h=Math.round(H*s);
   const id=dim?"b":"a";
-  // nota.jpg: a cedula ocupa o arquivo inteiro, sem margem a recortar
-  const IW=W, IH=H-6, IX=0, IY=2;
-  return `<svg viewBox="0 0 ${W} ${H}" width="${w}" height="${h}" role="img" aria-label="Cedula representando R$ ${fmt(valor)}">
+  // a imagem ocupa exatamente o retângulo do recorte (moldura de 3 px)
+  return `<svg viewBox="0 0 ${W} ${H}" width="${w}" height="${h}" role="img" aria-label="Cédula representando R$ ${fmt(valor)}">
     <defs><clipPath id="cp${id}"><rect x="3" y="3" width="${W-6}" height="${H-6}" rx="8"/></clipPath></defs>
     <g clip-path="url(#cp${id})">
-      <image href="nota.jpg" xlink:href="nota.jpg" x="${IX.toFixed(1)}" y="${IY.toFixed(1)}"
-             width="${IW.toFixed(1)}" height="${IH.toFixed(1)}" preserveAspectRatio="none"/>
+      <image href="nota.jpg" x="3" y="3" width="${W-6}" height="${H-6}" preserveAspectRatio="xMidYMid slice"/>
     </g>
     <rect x="3" y="3" width="${W-6}" height="${H-6}" rx="8" fill="none"
       stroke="${dim?"var(--alert)":"var(--note-2)"}" stroke-width="3"/>
@@ -160,32 +139,35 @@ function nota(ratio,valor,dim){
 }
 
 function grafico(a,b){
-  const W=860,H=230,L=52,R=14,T=16,B=30;
+  // A área de plotagem tem a proporção da cédula: 100% no eixo Y = cédula inteira.
+  const W=860,L=52,R=14,T=16,B=30;
+  const PW=W-L-R, PH=Math.round(PW*NOTA_PROP);   // 794 x 351
+  const H=T+PH+B;
   const pts=S.slice(a,b+1);
   const base=pts[0][1];
   const n=pts.length;
-  const x=i=>L+(W-L-R)*(n===1?0:i/(n-1));
-  const y=v=>T+(H-T-B)*(1-v);
+  const x=i=>L+PW*(n===1?0:i/(n-1));
+  const y=v=>T+PH*(1-v);
   const vals=pts.map(p=>base/p[1]);
-  const min=Math.min(...vals);
   const d=vals.map((v,i)=>`${i?"L":"M"}${x(i).toFixed(1)} ${y(v).toFixed(1)}`).join(" ");
   const area=d+` L${x(n-1).toFixed(1)} ${y(0)} L${x(0).toFixed(1)} ${y(0)} Z`;
-  let grid="",ticks=[0,.25,.5,.75,1];
-  if(min>.6) ticks=[.6,.7,.8,.9,1];
-  for(const t of ticks){
-    grid+=`<line x1="${L}" y1="${y(t)}" x2="${W-R}" y2="${y(t)}" stroke="var(--line)" stroke-width="1"/>
-      <text x="${L-8}" y="${y(t)+4}" text-anchor="end" fill="var(--muted)" font-family="IBM Plex Mono,monospace" font-size="11">${Math.round(t*100)}%</text>`;
+  // Escala fixa de 0 a 100%: é a altura da cédula, por isso não faz zoom.
+  let grade="",rotulos="";
+  for(const t of [0,.25,.5,.75,1]){
+    grade+=`<line x1="${L}" y1="${y(t)}" x2="${W-R}" y2="${y(t)}" stroke="var(--muted)" stroke-width="1" opacity=".35"/>`;
+    rotulos+=`<text x="${L-8}" y="${y(t)+4}" text-anchor="end" fill="var(--muted)" font-family="IBM Plex Mono,monospace" font-size="11">${Math.round(t*100)}%</text>`;
   }
   const marcas=n>1?[0,Math.floor((n-1)/2),n-1]:[0];
   const eixo=marcas.map(i=>`<text x="${x(i).toFixed(1)}" y="${H-8}" text-anchor="${i===0?"start":i===n-1?"end":"middle"}" fill="var(--muted)" font-family="IBM Plex Mono,monospace" font-size="11">${curto(pts[i][0])}</text>`).join("");
-  return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" style="height:230px;width:100%">
+  const desc=`Poder de compra de ${rotulo(pts[0][0])} a ${rotulo(pts[n-1][0])}: cai de 100% para ${fmt(vals[n-1]*100)}%`;
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${desc}">
     <defs>
       <clipPath id="recorteArea"><path d="${area}"/></clipPath>
     </defs>
-    ${grid}
-    <image href="nota.jpg" xlink:href="nota.jpg"
-           x="${L}" y="${T}" width="${W-L-R}" height="${H-T-B}"
-           preserveAspectRatio="xMinYMid slice" clip-path="url(#recorteArea)" opacity="1"/>
+    ${rotulos}
+    <image href="nota.jpg" x="${L}" y="${T}" width="${PW}" height="${PH}"
+           preserveAspectRatio="none" clip-path="url(#recorteArea)"/>
+    ${grade}
     <path d="${d}" fill="none" stroke="var(--alert)" stroke-width="2.5" stroke-linejoin="round"/>
     <circle cx="${x(n-1).toFixed(1)}" cy="${y(vals[n-1]).toFixed(1)}" r="4.5" fill="var(--alert)"/>
     ${eixo}

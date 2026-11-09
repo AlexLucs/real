@@ -17,7 +17,7 @@ valor ja existente na planilha:
     indice_novo = arredonda(indice_anterior * (1 + variacao/100), 2)
 
 Alem da planilha, o script regrava uma pagina HTML interativa
-("Desvalorizacao_Real.html") a partir do arquivo "modelo.html", que fica ao
+("index.html") a partir do arquivo "modelo.html", que fica ao
 lado do script. O modelo e um HTML comum: edite o visual nele a vontade; o
 unico ponto que o script toca e o marcador /*__SERIE__*/, onde a serie e
 injetada. Sem o modelo.html por perto, o script apenas avisa e segue.
@@ -41,6 +41,8 @@ import re
 import shutil
 import sys
 import tempfile
+import time
+import urllib.error
 import urllib.request
 import zipfile
 
@@ -54,7 +56,7 @@ MESES_PT = ["janeiro", "fevereiro", "mar\u00e7o", "abril", "maio", "junho",
 
 BASE = 915.93          # indice de julho/1994 (celula B3) = base do grafico
 MODELO = "modelo.html"          # template da pagina (ao lado do script)
-PAGINA = "Desvalorizacao_Real.html"  # pagina gerada
+PAGINA = "index.html"  # pagina gerada (servida pelo GitHub Pages)
 PRIMEIRA_LINHA = 3     # linha da planilha onde comeca a serie
 
 
@@ -79,18 +81,27 @@ def rotulo_titulo(ano, mes):
     return f"{r[0].upper()}{r[1:]} {ano}"
 
 
+def baixar_json(url, tentativas=3, espera=10):
+    """Baixa e decodifica um JSON, tentando de novo em caso de falha de rede."""
+    req = urllib.request.Request(url, headers={"User-Agent": "atualizar_ipca/1.0"})
+    for n in range(1, tentativas + 1):
+        try:
+            with urllib.request.urlopen(req, timeout=60) as resp:
+                return json.loads(resp.read().decode("utf-8"))
+        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as e:
+            print(f"Falha ao baixar a serie (tentativa {n}/{tentativas}): {e}")
+            if n < tentativas:
+                time.sleep(espera)
+    sys.exit("Nao foi possivel obter a serie do IPCA no Banco Central.")
+
+
 def baixar_serie(fonte):
     """Devolve [(ano, mes, variacao_percentual), ...] ordenado."""
-    if fonte and not fonte.startswith("http"):
+    if fonte and not fonte.startswith(("http://", "https://")):
         with open(fonte, encoding="utf-8") as fh:
             dados = json.load(fh)
     else:
-        req = urllib.request.Request(
-            fonte or URL_BCB,
-            headers={"User-Agent": "atualizar_ipca/1.0"},
-        )
-        with urllib.request.urlopen(req, timeout=60) as resp:
-            dados = json.loads(resp.read().decode("utf-8"))
+        dados = baixar_json(fonte or URL_BCB)
 
     serie = []
     for item in dados:
@@ -133,15 +144,20 @@ LINHA_GRAFICO = (
 # --------------------------------------------------------------------------
 # leitura da serie e geracao da pagina HTML
 # --------------------------------------------------------------------------
+def trecho_planilha1(content):
+    """Devolve (inicio, fim) do trecho do content.xml que pertence a Planilha1."""
+    ini = content.index('table:name="Planilha1"')
+    fim = content.find("<table:table ", ini)
+    return ini, (fim if fim > 0 else len(content))
+
+
 def ler_serie(caminho_ods):
     """Le a planilha e devolve [[AAAAMM, indice], ...] direto do XML do ODS."""
     with zipfile.ZipFile(caminho_ods) as z:
         content = z.read("content.xml").decode("utf-8")
 
-    # corta na Planilha1 para nao pegar outras abas
-    ini = content.index('table:name="Planilha1"')
-    fim = content.find("<table:table ", ini)
-    trecho = content[ini:fim if fim > 0 else len(content)]
+    ini, fim = trecho_planilha1(content)
+    trecho = content[ini:fim]
 
     padrao = re.compile(
         r"<text:p>([a-z\u00e7\u00e3]+) (\d{4})</text:p></table:table-cell>"
@@ -175,9 +191,14 @@ def gerar_html(serie, pasta_script, destino=None):
               "a pagina HTML nao foi gerada.")
         return None
 
-    # substitui o marcador e o array que o segue (seja [] ou uma serie antiga)
-    html = re.sub(re.escape(marcador) + r"\s*\[.*?\]",
-                  marcador + dados, html, count=1, flags=re.S)
+    # substitui o marcador e o array que o segue (seja [] ou uma serie antiga).
+    # O array vai ate o primeiro "];" -- um "]" sozinho fecharia so o primeiro par.
+    html, trocas = re.subn(re.escape(marcador) + r"\s*\[.*?\];",
+                           lambda _: marcador + dados + ";", html, count=1, flags=re.S)
+    if not trocas:
+        print(f"Aviso: o array apos {marcador} em {MODELO} nao termina com '];'; "
+              "a pagina HTML nao foi gerada.")
+        return None
 
     destino = destino or os.path.join(pasta_script, PAGINA)
     with open(destino, "w", encoding="utf-8") as fh:
@@ -264,11 +285,16 @@ def atualizar(caminho_entrada, caminho_saida, fonte=None, simular=False):
     fim = content.index("</table:table-row>", pos) + len("</table:table-row>")
     content = content[:fim] + "".join(novas_planilha) + content[fim:]
 
+    # A partir daqui as substituicoes valem so dentro da Planilha1, para nao
+    # depender da ordem das abas nem de estilos repetidos em outras folhas.
+    p_ini, p_fim = trecho_planilha1(content)
+    folha = content[p_ini:p_fim]
+
     # mantem o total de 1.048.576 linhas da folha
     def desconta(mo):
         return 'table:number-rows-repeated="%d"' % max(1, int(mo.group(1)) - n)
-    content = re.sub(r'table:number-rows-repeated="(\d{5,})"', desconta,
-                     content, count=1)
+    folha = re.sub(r'table:number-rows-repeated="(\d{5,})"', desconta,
+                   folha, count=1)
 
     # ---- atualiza os intervalos usados pelo grafico ------------------------
     def trocar_intervalos(texto):
@@ -278,18 +304,25 @@ def atualizar(caminho_entrada, caminho_saida, fonte=None, simular=False):
                 f"Planilha1.{col}{PRIMEIRA_LINHA}:Planilha1.{col}{nova_ultima_linha}")
         return texto
 
-    content = trocar_intervalos(content)
-
     # ---- caixa de texto com o valor final ---------------------------------
+    # A primeira caixa de texto da Planilha1 e a do mes atual; a segunda (fixa)
+    # e a de 1994. As duas trocas ficam presas ao mesmo <draw:text-box>.
     valor_final = BASE / idx * 100          # R$ 100 de jul/1994 valem hoje...
-    content = re.sub(
-        r'(<draw:text-box>.*?<text:span text:style-name="T1">)[^<]*(</text:span>)',
-        lambda mo: mo.group(1) + rotulo_titulo(ultimo_ano_n, ultimo_mes_n) + mo.group(2),
-        content, count=1, flags=re.S)
-    content = re.sub(
-        r'(<text:span text:style-name="T3">)[^<]*(</text:span>)',
-        lambda mo: mo.group(1) + br(f"{valor_final:.2f}") + mo.group(2),
-        content, count=1, flags=re.S)
+    caixa = re.search(r"<draw:text-box>.*?</draw:text-box>", folha, re.S)
+    if caixa:
+        bloco = re.sub(
+            r'(<text:span text:style-name="T1">)[^<]*(</text:span>)',
+            lambda mo: mo.group(1) + rotulo_titulo(ultimo_ano_n, ultimo_mes_n) + mo.group(2),
+            caixa.group(0), count=1)
+        bloco = re.sub(
+            r'(<text:span text:style-name="T3">)[^<]*(</text:span>)',
+            lambda mo: mo.group(1) + br(f"{valor_final:.2f}") + mo.group(2),
+            bloco, count=1)
+        folha = folha[:caixa.start()] + bloco + folha[caixa.end():]
+    else:
+        print("Aviso: caixa de texto do valor final nao encontrada na Planilha1.")
+
+    content = trocar_intervalos(content[:p_ini] + folha + content[p_fim:])
 
     conteudo["content.xml"] = content.encode("utf-8")
 
