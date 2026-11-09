@@ -26,12 +26,15 @@ jobs:
         with:
           python-version: '3.12'
 
+      # "shell: bash" explícito faz o Actions usar "bash -eo pipefail":
+      # sem isso, uma falha do Python dentro do "| tee" passaria em silêncio.
       - name: Rodar o atualizador
+        shell: bash
         run: |
           python atualizar_ipca.py | tee saida.txt
-          python atualizar_ipca.py --so-html --html index.html
 
       - name: Commitar se algo mudou
+        shell: bash
         run: |
           MES=$(sed -n 's/.*Pagina gerada:.*ate \(.*\))$/\1/p' saida.txt | tail -1)
           rm -f saida.txt
