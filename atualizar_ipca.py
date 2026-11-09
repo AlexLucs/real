@@ -6,9 +6,15 @@ dados mais recentes do IPCA, preservando a formatacao, as formulas e o grafico.
 
 Fonte dos dados
 ---------------
-Banco Central do Brasil - SGS (Sistema Gerenciador de Series Temporais),
-serie 433 = "IPCA - variacao mensal (%)" (dado produzido pelo IBGE).
-    https://api.bcb.gov.br/dados/serie/bcdata.sgs.433/dados?formato=json
+1) Banco Central do Brasil - SGS, serie 433 = "IPCA - variacao mensal (%)".
+       https://api.bcb.gov.br/dados/serie/bcdata.sgs.433/dados
+2) Reserva, se o BCB falhar: IBGE, API de agregados, tabela 1737,
+   variavel 63 = "IPCA - Variacao mensal" (o mesmo dado, na origem).
+       https://servicodados.ibge.gov.br/api/v3/agregados/1737/...
+
+Pede-se so a janela recente (24 meses antes do ultimo mes da planilha em
+diante), com cabecalhos que proibem resposta de cache: em nov/2026 a API do
+BCB passou a responder "304 Not Modified" a requisicoes sem cabecalhos.
 
 O numero-indice da coluna B (base dez/1993 = 100, mesma da tabela 1737 do
 SIDRA/IBGE) e reconstruido encadeando as variacoes mensais a partir do ultimo
@@ -46,7 +52,16 @@ import urllib.error
 import urllib.request
 import zipfile
 
-URL_BCB = "https://api.bcb.gov.br/dados/serie/bcdata.sgs.433/dados?formato=json"
+URL_BCB = "https://api.bcb.gov.br/dados/serie/bcdata.sgs.433/dados"
+URL_IBGE = ("https://servicodados.ibge.gov.br/api/v3/agregados/1737/"
+            "periodos/{periodos}/variaveis/63?localidades=N1%5Ball%5D")
+CABECALHOS = {
+    "User-Agent": "Mozilla/5.0 (compatible; atualizar_ipca/1.1)",
+    "Accept": "application/json",
+    "Cache-Control": "no-cache",
+    "Pragma": "no-cache",
+}
+JANELA_MESES = 24      # quantos meses antes do ultimo da planilha pedir de novo
 
 MESES = ["janeiro", "fevereiro", "marco", "abril", "maio", "junho",
          "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"]
@@ -81,34 +96,87 @@ def rotulo_titulo(ano, mes):
     return f"{r[0].upper()}{r[1:]} {ano}"
 
 
-def baixar_json(url, tentativas=3, espera=10):
-    """Baixa e decodifica um JSON, tentando de novo em caso de falha de rede."""
-    req = urllib.request.Request(url, headers={"User-Agent": "atualizar_ipca/1.0"})
+class FalhaDownload(Exception):
+    """Uma fonte nao respondeu com dados validos."""
+
+
+def baixar_json(url, tentativas=2, espera=10):
+    """Baixa e decodifica um JSON, tentando de novo em caso de falha."""
+    req = urllib.request.Request(url, headers=CABECALHOS)
+    ultimo_erro = None
     for n in range(1, tentativas + 1):
         try:
             with urllib.request.urlopen(req, timeout=60) as resp:
                 return json.loads(resp.read().decode("utf-8"))
         except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as e:
-            print(f"Falha ao baixar a serie (tentativa {n}/{tentativas}): {e}")
+            # urllib trata 304 (e qualquer nao-2xx) como HTTPError, sem corpo
+            ultimo_erro = e
+            print(f"  tentativa {n}/{tentativas} falhou: {e}")
             if n < tentativas:
                 time.sleep(espera)
-    sys.exit("Nao foi possivel obter a serie do IPCA no Banco Central.")
+    raise FalhaDownload(str(ultimo_erro))
 
 
-def baixar_serie(fonte):
-    """Devolve [(ano, mes, variacao_percentual), ...] ordenado."""
-    if fonte and not fonte.startswith(("http://", "https://")):
-        with open(fonte, encoding="utf-8") as fh:
-            dados = json.load(fh)
-    else:
-        dados = baixar_json(fonte or URL_BCB)
+def mes_menos(ano, mes, k):
+    """(ano, mes) recuado k meses."""
+    t = ano * 12 + (mes - 1) - k
+    return t // 12, t % 12 + 1
 
+
+def ler_bcb(dados):
+    """Formato SGS: [{"data": "01/09/2026", "valor": "0.48"}, ...]"""
     serie = []
     for item in dados:
-        dia, mes, ano = item["data"].split("/")
+        _, mes, ano = item["data"].split("/")
         serie.append((int(ano), int(mes), float(item["valor"])))
-    serie.sort()
     return serie
+
+
+def ler_ibge(dados):
+    """Formato IBGE v3: [{"resultados": [{"series": [{"serie": {"202609": "0.48"}}]}]}]"""
+    serie = []
+    for periodo, valor in dados[0]["resultados"][0]["series"][0]["serie"].items():
+        try:
+            v = float(valor)
+        except (TypeError, ValueError):
+            continue        # "..." ou "-": mes ainda sem dado
+        serie.append((int(periodo[:4]), int(periodo[4:]), v))
+    return serie
+
+
+def baixar_serie(fonte, desde):
+    """Devolve [(ano, mes, variacao_percentual), ...] ordenado.
+
+    fonte: None (BCB com reserva no IBGE), URL no formato do SGS ou caminho
+    de um JSON local no formato do SGS. desde: (ano, mes) a partir do qual
+    os dados sao pedidos.
+    """
+    if fonte and not fonte.startswith(("http://", "https://")):
+        with open(fonte, encoding="utf-8") as fh:
+            serie = ler_bcb(json.load(fh))
+        return sorted(serie)
+
+    a, m = desde
+    url_bcb = fonte or (f"{URL_BCB}?formato=json&dataInicial=01/{m:02d}/{a}"
+                        f"&dataFinal={time.strftime('%d/%m/%Y')}")
+    tentativas = [("Banco Central (SGS 433)", url_bcb, ler_bcb)]
+    if not fonte:
+        tentativas.append(("IBGE (tabela 1737)",
+                           URL_IBGE.format(periodos=f"-{JANELA_MESES + 12}"), ler_ibge))
+
+    for nome, url, ler in tentativas:
+        print(f"Baixando de {nome}...")
+        try:
+            serie = ler(baixar_json(url))
+        except FalhaDownload:
+            continue
+        except (KeyError, IndexError, TypeError, ValueError) as e:
+            print(f"  resposta em formato inesperado: {e!r}")
+            continue
+        if serie:
+            return sorted(serie)
+        print("  resposta vazia.")
+    sys.exit("Nao foi possivel obter a serie do IPCA (BCB e IBGE falharam).")
 
 
 # --------------------------------------------------------------------------
@@ -240,7 +308,7 @@ def atualizar(caminho_entrada, caminho_saida, fonte=None, simular=False):
           f"(linha {ultima_linha}, indice {ultimo_indice})")
 
     # ---- baixa e filtra o que falta ---------------------------------------
-    serie = baixar_serie(fonte)
+    serie = baixar_serie(fonte, mes_menos(ultimo_ano, ultimo_mes, JANELA_MESES))
     faltando = [(a, me, v) for (a, me, v) in serie
                 if (a, me) > (ultimo_ano, ultimo_mes)]
     if not faltando:
@@ -369,7 +437,7 @@ def main():
     p.add_argument("-s", "--saida", default=None,
                    help="padrao: grava por cima do arquivo de entrada")
     p.add_argument("--fonte", default=None,
-                   help="URL alternativa ou caminho de um JSON local")
+                   help="URL no formato do SGS ou JSON local (desliga a reserva do IBGE)")
     p.add_argument("--simular", action="store_true",
                    help="mostra o que seria acrescentado, sem gravar")
     p.add_argument("--so-html", action="store_true",
