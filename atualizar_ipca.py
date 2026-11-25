@@ -64,8 +64,9 @@ Checagens
   julho/1994 e ter variacoes plausiveis; tambem conferido no --verificar.
 - --auditar baixa o numero-indice oficial (tabela 1737, variavel 2266) de
   junho/1994 em diante e compara um a um (tolerancia 0,015). Nunca corrige.
-  Sai com 0 (aprovada; pode faltar so o ultimo mes), 1 (divergencia) ou 2
-  (incompleta: IBGE fora do ar, resposta inesperada ou mes antigo ausente).
+  Sai com 0 (aprovada; pode faltar so o ultimo mes), 1 (divergencia), 2 (IBGE
+  fora do ar) ou 3 (resposta incompleta ou inesperada). So o 1 bloqueia a
+  publicacao no workflow.
 - O .ods novo e gravado num temporario e conferido (XML bem-formado, serie
   relida, formulas e valores das colunas C e D das linhas novas, caixa de
   texto com o mes e o valor final, linhas, intervalos e pontos do grafico)
@@ -135,8 +136,6 @@ TOLERANCIA_REVISAO = 0.015  # p.p.; a variacao implicita na planilha fica a
 TOLERANCIA_AUDITORIA = 0.015  # pontos de indice; o encadeamento admite +-0,01
 DIA_DIVULGACAO = 15     # a partir deste dia, o IPCA do mes anterior ja deve existir
 
-MESES = ["janeiro", "fevereiro", "marco", "abril", "maio", "junho",
-         "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"]
 # nomes exatamente como aparecem na planilha (com acento)
 MESES_PT = ["janeiro", "fevereiro", "março", "abril", "maio", "junho",
             "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"]
@@ -471,12 +470,20 @@ def checar_indices(serie):
     return erros
 
 
-AUDITORIA_OK, AUDITORIA_DIVERGENTE, AUDITORIA_INCOMPLETA = 0, 1, 2
+AUDITORIA_OK, AUDITORIA_DIVERGENTE, AUDITORIA_INDISPONIVEL, AUDITORIA_INCOMPLETA = 0, 1, 2, 3
+
+
+def indisponivel(msg):
+    """IBGE nao respondeu: aviso e codigo 2 (o workflow segue)."""
+    aviso(msg)
+    sys.exit(AUDITORIA_INDISPONIVEL)
 
 
 def incompleta(msg):
-    """Auditoria que nao pode ser concluida: aviso e codigo 2 (o workflow segue)."""
-    aviso(msg)
+    """O IBGE respondeu, mas sem cobrir a serie ou em formato inesperado:
+    anotacao de ERRO e codigo 3 (o workflow segue, mas o problema fica visivel)."""
+    print(f"ERRO: {msg}", flush=True)
+    anotacao("error", msg)
     sys.exit(AUDITORIA_INCOMPLETA)
 
 
@@ -485,7 +492,8 @@ def auditar(caminho_ods):
     Nunca corrige nada. Codigos de saida:
       0 = aprovada (todos os meses dentro da tolerancia; pode faltar so o ultimo);
       1 = divergencia acima da tolerancia (o workflow nao publica);
-      2 = incompleta: IBGE indisponivel, resposta inesperada ou falta mes antigo."""
+      2 = IBGE indisponivel (nao respondeu);
+      3 = incompleta: o IBGE respondeu em formato inesperado ou sem mes antigo."""
     alvo = serie_pagina(ler_serie(caminho_ods))
     ini, fim = alvo[0][0], alvo[-1][0]
     nome = "IBGE (tabela 1737, variavel 2266)"
@@ -494,7 +502,7 @@ def auditar(caminho_ods):
         oficial = {a * 100 + me: v
                    for a, me, v in ler_ibge(baixar_json(URL_IBGE_INDICE.format(ini=ini, fim=fim)))}
     except FalhaDownload as e:
-        incompleta(f"Auditoria nao realizada: {nome} nao respondeu ({e}).")
+        indisponivel(f"Auditoria nao realizada: {nome} nao respondeu ({e}).")
     except (KeyError, IndexError, TypeError, AttributeError, ValueError) as e:
         incompleta(f"Auditoria nao realizada: resposta inesperada ({type(e).__name__}: {e}).")
     faltam = [c for c, _ in alvo if c not in oficial]
@@ -1114,7 +1122,9 @@ def main():
     p.add_argument("--conferir-com", default=None, metavar="JSON",
                    help="JSON local (formato do SGS) usado na conferencia cruzada; para testes")
     p.add_argument("--auditar", action="store_true",
-                   help="compara toda a serie com o numero-indice oficial do IBGE (so reporta)")
+                   help="compara toda a serie com o numero-indice oficial do IBGE; sai com 0 (ok), "
+                        "1 (divergencia: bloqueia a publicacao), 2 (IBGE fora do ar) "
+                        "ou 3 (resposta incompleta)")
     p.add_argument("--verificar", action="store_true",
                    help="so confere se o index.html corresponde a planilha (sai com 1 se nao)")
     p.add_argument("--html", default=None,
