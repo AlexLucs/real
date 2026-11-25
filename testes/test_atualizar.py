@@ -98,7 +98,7 @@ class Base(unittest.TestCase):
             try:
                 funcao(*args)
             except SystemExit as e:
-                codigo = 1 if e.code not in (0, None) else 0
+                codigo = e.code if isinstance(e.code, int) else (0 if e.code is None else 1)
                 print(e.code)
         return codigo, out.getvalue()
 
@@ -254,9 +254,9 @@ class TestConferenciaODS(Base):
 
 
 class TestAuditoria(Base):
-    def oficial(self, ajuste=None):
+    def oficial(self, ajuste=None, sem=()):
         alvo = A.serie_pagina(self.serie)
-        serie = {str(c): f"{v:.2f}" for c, v in alvo}
+        serie = {str(c): f"{v:.2f}" for c, v in alvo if c not in sem}
         if ajuste:
             c, delta = ajuste
             serie[str(c)] = f"{float(serie[str(c)]) + delta:.2f}"
@@ -285,10 +285,34 @@ class TestAuditoria(Base):
         cod, out = self.auditar(self.oficial((A.MES_BASE, 0.10)))
         self.assertEqual(cod, 1, out)
 
-    def test_ibge_fora_nao_falha(self):
+    def test_ibge_fora_e_incompleta(self):
         cod, out = self.auditar(None)
-        self.assertEqual(cod, 0, out)
+        self.assertEqual(cod, 2, out)
         self.assertIn("Auditoria nao realizada", out)
+
+    def test_falta_mes_antigo_e_incompleta(self):
+        cod, out = self.auditar(self.oficial(sem=(200001,)))
+        self.assertEqual(cod, 2, out)
+        self.assertIn("Auditoria incompleta", out)
+
+    def test_falta_so_o_ultimo_mes_aprova(self):
+        cod, out = self.auditar(self.oficial(sem=(self.serie[-1][0],)))
+        self.assertEqual(cod, 0, out)
+        self.assertIn("nao foi auditado", out)
+
+    def test_divergencia_prevalece_sobre_mes_ausente(self):
+        cod, out = self.auditar(self.oficial((200001, 0.05), sem=(200002,)))
+        self.assertEqual(cod, 1, out)
+
+
+class TestPagina(Base):
+    def test_rodape_nao_presume_fonte_e_rotulo_de_ganho(self):
+        self.assertEqual(self.cli("--so-html")[0], 0)
+        with open(os.path.join(self.dir, "index.html"), encoding="utf-8") as fh:
+            html = fh.read()
+        self.assertIn('<span id="via">; fonte da última coleta não registrada</span>', html)
+        self.assertNotIn('<span id="via">Banco Central', html)
+        self.assertIn('"Poder de compra ganho"', html)
 
 
 if __name__ == "__main__":
