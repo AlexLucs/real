@@ -52,7 +52,10 @@ Checagens
   (::warning:: / ::error::), que aparecem no resumo do run mesmo quando ele
   termina verde.
 - A data e a fonte da coleta vao para as propriedades do documento
-  (meta.xml: IPCA_coleta, IPCA_fonte) e dali para a pagina.
+  (meta.xml: IPCA_coleta, IPCA_fonte) e dali para a pagina. O resultado da
+  conferencia cruzada da ultima coleta fica em IPCA_conferencia ("ok com ...",
+  "parcial com ... (sem <mes>)" ou "sem conferencia (<motivo>)"); ele descreve
+  so os meses gravados naquela execucao e nao vai para a pagina.
 
 Alem da planilha, o script regrava uma pagina HTML interativa
 ("index.html") a partir do arquivo "modelo.html", que fica ao
@@ -116,6 +119,7 @@ PRIMEIRA_LINHA = 3     # linha da planilha onde comeca a serie
 MARCA_SERIE = "/*__SERIE__*/"
 MARCA_META = "/*__META__*/"
 PROP_COLETA, PROP_FONTE = "IPCA_coleta", "IPCA_fonte"   # propriedades no meta.xml
+PROP_CONFERENCIA = "IPCA_conferencia"   # so no meta.xml; a pagina nao mostra
 
 NS = {
     "office": "urn:oasis:names:tc:opendocument:xmlns:office:1.0",
@@ -349,27 +353,30 @@ def baixar_serie(fonte, desde, conferir_com=None):
     falhar("Nao foi possivel obter a serie do IPCA (BCB e IBGE falharam).")
 
 
-def conferir_fontes(novos, conferencia, nome_conf):
+def conferir_fontes(novos, nome_principal, conferencia, nome_conf):
     """Compara os meses novos com a segunda fonte. Divergencia encerra o script;
-    falta da segunda fonte (ou do mes nela) so gera aviso."""
+    falta da segunda fonte (ou do mes nela) so gera aviso.
+    Devolve o status da conferencia, gravado em IPCA_conferencia."""
     if conferencia is None:
         aviso("Conferencia cruzada indisponivel; meses novos gravados com uma fonte so.")
-        return
+        return f"sem conferencia ({nome_conf} indisponivel)"
     outra = {(a, me): v for a, me, v in conferencia}
     divergentes, sem_dado = [], []
     for a, me, v in novos:
         if (a, me) not in outra:
             sem_dado.append(rotulo(a, me))
         elif round(abs(outra[(a, me)] - v), 6) > 0:
-            divergentes.append(f"{rotulo(a, me)}: {v:+.2f}% x {outra[(a, me)]:+.2f}%")
+            w = outra[(a, me)]
+            divergentes.append(f"{rotulo(a, me)}: {nome_principal} {v:+.2f}% x "
+                               f"{nome_conf} {w:+.2f}% (diferenca {abs(w - v):.2f} p.p.)")
     if divergentes:
-        falhar(f"As fontes divergem ({nome_conf}): " + "; ".join(divergentes)
-               + ". Nada foi gravado.")
+        falhar("As fontes divergem: " + "; ".join(divergentes) + ". Nada foi gravado.")
     if sem_dado:
         aviso(f"{nome_conf} ainda sem " + ", ".join(sem_dado)
               + "; esses meses nao tiveram conferencia cruzada.")
-    else:
-        print(f"Conferencia cruzada ok com {nome_conf} ({len(novos)} mes(es) novo(s)).")
+        return f"parcial com {nome_conf} (sem {', '.join(sem_dado)})"
+    print(f"Conferencia cruzada ok com {nome_conf} ({len(novos)} mes(es) novo(s)).")
+    return f"ok com {nome_conf}"
 
 
 def checar_revisoes(serie_baixada, serie_planilha):
@@ -495,9 +502,10 @@ def ler_meta(caminho_ods):
     return meta
 
 
-def gravar_meta(meta_xml, coleta, fonte):
-    """Grava/atualiza IPCA_coleta e IPCA_fonte no meta.xml (texto)."""
-    for nome, valor in ((PROP_COLETA, coleta), (PROP_FONTE, fonte)):
+def gravar_meta(meta_xml, props):
+    """Grava/atualiza propriedades do documento no meta.xml (texto).
+    props: {nome: valor}, na ordem em que devem aparecer se forem novas."""
+    for nome, valor in props.items():
         elemento = (f'<meta:user-defined meta:name="{nome}" '
                     f'meta:value-type="string">{escape(valor)}</meta:user-defined>')
         padrao = re.compile(r'<meta:user-defined meta:name="%s"[^>]*?'
@@ -773,7 +781,7 @@ def atualizar(caminho_entrada, caminho_saida, fonte=None, simular=False,
 
     for cod, na_planilha, baixada in checar_revisoes(serie, serie_planilha):
         aviso(f"{rotulo(cod // 100, cod % 100)} na planilha = {na_planilha:+.2f}%, "
-              f"na fonte = {baixada:+.2f}% (possivel revisao; a planilha nao foi alterada).")
+              f"em {nome_fonte} = {baixada:+.2f}% (possivel revisao; a planilha nao foi alterada).")
 
     faltando = [(a, me, v) for (a, me, v) in serie
                 if (a, me) > (ultimo_ano, ultimo_mes)]
@@ -790,7 +798,11 @@ def atualizar(caminho_entrada, caminho_saida, fonte=None, simular=False,
     # conferencia cruzada: online, so quando a fonte principal foi o BCB;
     # com --fonte, so se --conferir-com foi dado
     if conferir_com or (not fonte and nome_fonte == FONTE_BCB):
-        conferir_fontes(faltando, conferencia, nome_conf)
+        status_conf = conferir_fontes(faltando, nome_fonte, conferencia, nome_conf)
+    elif fonte:
+        status_conf = "sem conferencia (fonte informada com --fonte)"
+    else:
+        status_conf = f"sem conferencia (usada a reserva, {nome_fonte})"
 
     if simular:
         idx = ultimo_indice
@@ -885,9 +897,11 @@ def atualizar(caminho_entrada, caminho_saida, fonte=None, simular=False,
 
     # ---- proveniencia: data e fonte da coleta nas propriedades -------------
     if "meta.xml" in conteudo:
-        conteudo["meta.xml"] = gravar_meta(
-            conteudo["meta.xml"].decode("utf-8"),
-            time.strftime("%Y-%m-%d"), nome_fonte).encode("utf-8")
+        conteudo["meta.xml"] = gravar_meta(conteudo["meta.xml"].decode("utf-8"), {
+            PROP_COLETA: time.strftime("%Y-%m-%d"),
+            PROP_FONTE: nome_fonte,
+            PROP_CONFERENCIA: status_conf,
+        }).encode("utf-8")
 
     # ---- grava num temporario, confere e so entao substitui ---------------
     fd, tmp = tempfile.mkstemp(suffix=".ods")
