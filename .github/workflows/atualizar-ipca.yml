@@ -52,8 +52,9 @@ jobs:
 
       # Compara toda a série com o número-índice oficial do IBGE (variável 2266)
       # ANTES do commit. Código 1 (divergência) interrompe: nada é publicado.
-      # Código 2 (IBGE fora do ar, resposta inesperada ou mês antigo ausente)
-      # só avisa e segue, para a indisponibilidade não travar a atualização.
+      # Código 2 (IBGE fora do ar) e 3 (resposta incompleta ou inesperada, com
+      # anotação de erro no resumo) seguem, para um problema do IBGE não travar
+      # a atualização.
       - name: Auditar contra o índice oficial do IBGE
         shell: bash
         run: |
@@ -61,7 +62,11 @@ jobs:
           python atualizar_ipca.py --auditar
           cod=$?
           if [ "$cod" -eq 2 ]; then
-            echo "Auditoria incompleta: segue sem bloquear a publicação."
+            echo "IBGE indisponível: auditoria não realizada; segue sem bloquear."
+            exit 0
+          fi
+          if [ "$cod" -eq 3 ]; then
+            echo "Auditoria incompleta (resposta do IBGE): segue sem bloquear; ver anotação de erro."
             exit 0
           fi
           exit $cod
