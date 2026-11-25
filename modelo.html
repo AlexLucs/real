@@ -151,15 +151,17 @@ footer{display:flex;justify-content:space-between;align-items:baseline;gap:24px;
   </div>
 
   <footer>
-    <span>Fonte: IPCA/IBGE, série 433 do SGS do Banco Central. Último mês disponível: <span id="ult"></span>.
+    <span>Fonte: IPCA/IBGE, obtido via <span id="via">Banco Central (SGS 433)</span><span id="coleta"></span>. Último mês disponível: <span id="ult"></span>.
       Número-índice da planilha, referência julho/1994 = 915,93 (base dezembro/1993 = 100).</span>
     <!-- Versão da página (SemVer): mudar à mão ao alterar o modelo.html -->
-    <span class="versao" title="Versão da página">v1.0.0</span>
+    <span class="versao" title="Versão da página">v1.1.0</span>
   </footer>
 </div>
 
 <script>
 const S = /*__SERIE__*/[];
+/* Data (AAAA-MM-DD) e fonte da última coleta, lidas das propriedades da planilha */
+const META = /*__META__*/{};
 
 const MES=["janeiro","fevereiro","março","abril","maio","junho","julho","agosto","setembro","outubro","novembro","dezembro"];
 const MC=["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];
@@ -309,6 +311,11 @@ function semHover(){
 const sel=(el,def)=>{el.innerHTML=S.map(([c])=>`<option value="${c}">${rotulo(c)}</option>`).join("");el.value=def;};
 sel($("ini"),S[0][0]); sel($("fim"),S[S.length-1][0]);
 $("ult").textContent=rotulo(S[S.length-1][0]);
+if(META.fonte) $("via").textContent=META.fonte;
+if(/^\d{4}-\d{2}-\d{2}$/.test(META.coleta||"")){
+  const [y,m,d]=META.coleta.split("-");
+  $("coleta").textContent=`, coletado em ${d}/${m}/${y}`;
+}
 
 let atual=null, pod=1;
 function desenhar(){
