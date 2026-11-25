@@ -33,6 +33,14 @@ jobs:
         run: |
           python atualizar_ipca.py | tee saida.txt
 
+      # Confere se index.html corresponde à planilha e ao modelo.html.
+      # Se falhar (ex.: o modelo perdeu o marcador e a página não foi gerada),
+      # o job para aqui e nada é commitado.
+      - name: Verificar planilha e página
+        shell: bash
+        run: |
+          python atualizar_ipca.py --verificar
+
       - name: Commitar se algo mudou
         shell: bash
         run: |
