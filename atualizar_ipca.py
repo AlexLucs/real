@@ -16,6 +16,18 @@ Pede-se so a janela recente (24 meses antes do ultimo mes da planilha em
 diante), com cabecalhos que proibem resposta de cache: em nov/2026 a API do
 BCB passou a responder "304 Not Modified" a requisicoes sem cabecalhos.
 
+Base e convencao de periodo
+---------------------------
+Como na calculadora do IBGE, um periodo vai do INICIO do mes inicial ao FIM
+do mes final: a variacao e indice(mes final) / indice(mes anterior ao
+inicial). "Desde o Plano Real" e, portanto, desde 1o de julho de 1994, e a
+base e o indice de junho/1994 = 857,29 (BASE). Com ela, o acumulado de
+jul/1994 a jun/2019 da 508,23%, o mesmo numero divulgado pelo IBGE nos 25
+anos do Real. A coluna C da planilha e B/857,29 e a coluna D (1/C) e o poder
+de compra, no fim de cada mes, de R$ 100 do inicio de julho/1994. A serie da
+planilha comeca em julho/1994; junho/1994 entra so como base (aqui e na
+pagina).
+
 Numero-indice e regra de arredondamento
 ---------------------------------------
 O numero-indice da coluna B (base dez/1993 = 100, mesma da tabela 1737 do
@@ -42,8 +54,16 @@ Checagens
   (as duas publicam o mesmo dado com 2 casas, entao qualquer diferenca conta),
   nada e gravado. Se a outra fonte estiver fora do ar ou ainda sem o mes,
   segue-se com aviso.
-- Meses que a planilha ja tem sao comparados com a variacao baixada; se o
-  BCB/IBGE tiver revisado algum, sai um aviso (a planilha nao e alterada).
+- Meses que a planilha ja tem sao comparados com a variacao baixada e, nos
+  meses que as duas fontes tem, BCB com IBGE; diferencas geram aviso (a
+  planilha nao e alterada).
+- Atualidade: aviso se o IBGE ja tem um mes que o BCB nao tem, ou se o mes mais
+  recente disponivel estiver atrasado (a partir do dia 15, espera-se o mes
+  anterior; antes, o retrasado).
+- A serie da planilha precisa ter indices finitos e positivos, comecar em
+  julho/1994 e ter variacoes plausiveis; tambem conferido no --verificar.
+- --auditar baixa o numero-indice oficial (tabela 1737, variavel 2266) de
+  junho/1994 em diante e compara um a um (tolerancia 0,015). So reporta.
 - O .ods novo e gravado num temporario e conferido (XML bem-formado, serie
   relida, formulas e valores das colunas C e D das linhas novas, caixa de
   texto com o mes e o valor final, linhas, intervalos e pontos do grafico)
@@ -72,6 +92,7 @@ Uso
     python3 atualizar_ipca.py --so-html            # so regera o HTML
     python3 atualizar_ipca.py --sem-html           # so mexe na planilha
     python3 atualizar_ipca.py --verificar          # confere planilha x index.html
+    python3 atualizar_ipca.py --auditar            # compara a serie com o indice oficial
     python3 atualizar_ipca.py --fonte a.json --conferir-com b.json
                                                    # testes: conferencia com JSON local
 
@@ -80,6 +101,7 @@ O script e idempotente: rodar duas vezes seguidas nao duplica nada.
 
 import argparse
 import json
+import math
 import os
 import re
 import shutil
@@ -95,6 +117,9 @@ from xml.sax.saxutils import escape
 URL_BCB = "https://api.bcb.gov.br/dados/serie/bcdata.sgs.433/dados"
 URL_IBGE = ("https://servicodados.ibge.gov.br/api/v3/agregados/1737/"
             "periodos/{periodos}/variaveis/63?localidades=N1%5Ball%5D")
+# numero-indice oficial (dez/1993 = 100), usado so na auditoria (--auditar)
+URL_IBGE_INDICE = ("https://servicodados.ibge.gov.br/api/v3/agregados/1737/"
+                   "periodos/{ini}-{fim}/variaveis/2266?localidades=N1%5Ball%5D")
 CABECALHOS = {
     "User-Agent": "Mozilla/5.0 (compatible; atualizar_ipca/1.2)",
     "Accept": "application/json",
@@ -105,6 +130,8 @@ JANELA_MESES = 24      # quantos meses antes do ultimo da planilha pedir de novo
 LIMITE_VARIACAO = 10.0  # |variacao mensal| acima disso (em %) e tida como erro
 TOLERANCIA_REVISAO = 0.015  # p.p.; a variacao implicita na planilha fica a
                             # menos de 0,001 p.p. da publicada
+TOLERANCIA_AUDITORIA = 0.015  # pontos de indice; o encadeamento admite +-0,01
+DIA_DIVULGACAO = 15     # a partir deste dia, o IPCA do mes anterior ja deve existir
 
 MESES = ["janeiro", "fevereiro", "marco", "abril", "maio", "junho",
          "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"]
@@ -112,7 +139,9 @@ MESES = ["janeiro", "fevereiro", "marco", "abril", "maio", "junho",
 MESES_PT = ["janeiro", "fevereiro", "março", "abril", "maio", "junho",
             "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"]
 
-BASE = 915.93          # indice de julho/1994 (celula B3) = base do grafico
+BASE = 857.29          # indice de junho/1994 = base do "desde 1o de julho de 1994"
+MES_BASE = 199406      # mes da BASE (fica fora da planilha; vai so como base da pagina)
+MES_INICIAL = 199407   # primeiro mes da serie (celula A3)
 MODELO = "modelo.html"          # template da pagina (ao lado do script)
 PAGINA = "index.html"  # pagina gerada (servida pelo GitHub Pages)
 PRIMEIRA_LINHA = 3     # linha da planilha onde comeca a serie
@@ -379,6 +408,104 @@ def conferir_fontes(novos, nome_principal, conferencia, nome_conf):
     return f"ok com {nome_conf}"
 
 
+def hoje_utc():
+    """(ano, mes, dia) de hoje em UTC (funcao separada para os testes)."""
+    t = time.gmtime()
+    return t.tm_year, t.tm_mon, t.tm_mday
+
+
+def checar_atualidade(serie, nome_fonte, conferencia, nome_conf):
+    """Avisa se a fonte principal esta atras da conferencia ou se a serie como
+    um todo esta atrasada em relacao ao calendario de divulgacao."""
+    ultimo = serie[-1][:2]
+    mais_recente = ultimo
+    if conferencia:
+        ult_conf = conferencia[-1][:2]
+        if ult_conf > ultimo:
+            aviso(f"{nome_conf} ja tem {rotulo(*ult_conf)}, mas {nome_fonte} vai so ate "
+                  f"{rotulo(*ultimo)} (resposta possivelmente desatualizada). A planilha "
+                  f"so avanca ate onde a fonte principal chega.")
+        mais_recente = max(ultimo, ult_conf)
+    a, m, d = hoje_utc()
+    esperado = mes_menos(a, m, 1 if d >= DIA_DIVULGACAO else 2)
+    if mais_recente < esperado:
+        aviso(f"Serie atrasada: o mes mais recente disponivel e {rotulo(*mais_recente)}, "
+              f"mas {rotulo(*esperado)} ja deveria ter sido divulgado.")
+
+
+def comparar_janela(serie, nome_fonte, conferencia, nome_conf, ate):
+    """Compara as duas fontes nos meses ja existentes na planilha (ate `ate`).
+    Diferenca so gera aviso: esses meses nao sao regravados."""
+    outra = {(a, me): v for a, me, v in conferencia}
+    difs = [f"{rotulo(a, me)}: {v:+.2f}% x {outra[(a, me)]:+.2f}%"
+            for a, me, v in serie
+            if (a, me) <= ate and (a, me) in outra and round(abs(outra[(a, me)] - v), 6) > 0]
+    if difs:
+        aviso(f"{nome_fonte} x {nome_conf} divergem em meses ja gravados: "
+              + "; ".join(difs) + ". A planilha nao foi alterada.")
+
+
+def checar_indices(serie):
+    """Problemas numericos numa serie [[AAAAMM, indice], ...] da planilha:
+    indice nao finito ou nao positivo, primeiro mes errado, variacao implausivel
+    (inclusive da BASE para o primeiro mes)."""
+    erros = []
+    if not serie:
+        return ["planilha sem serie"]
+    if serie[0][0] != MES_INICIAL:
+        erros.append(f"a serie comeca em {serie[0][0]}; esperado {MES_INICIAL}")
+    anterior = (MES_BASE, BASE)
+    for cod, v in serie:
+        if not (isinstance(v, (int, float)) and math.isfinite(v) and v > 0):
+            erros.append(f"indice invalido em {rotulo(cod // 100, cod % 100)}: {v!r}")
+            anterior = None
+            continue
+        if anterior:
+            var = (v / anterior[1] - 1) * 100
+            if abs(var) > LIMITE_VARIACAO:
+                erros.append(f"variacao implausivel em {rotulo(cod // 100, cod % 100)}: "
+                             f"{var:+.2f}%")
+        anterior = (cod, v)
+    return erros
+
+
+def auditar(caminho_ods):
+    """Compara toda a serie (e a BASE) com o numero-indice oficial do IBGE.
+    So reporta. Divergencia sai com codigo 1; IBGE indisponivel, so aviso."""
+    alvo = serie_pagina(ler_serie(caminho_ods))
+    ini, fim = alvo[0][0], alvo[-1][0]
+    nome = "IBGE (tabela 1737, variavel 2266)"
+    print(f"Auditando {len(alvo)} indices ({ini} a {fim}) contra {nome}...", flush=True)
+    try:
+        oficial = {a * 100 + me: v
+                   for a, me, v in ler_ibge(baixar_json(URL_IBGE_INDICE.format(ini=ini, fim=fim)))}
+    except FalhaDownload as e:
+        aviso(f"Auditoria nao realizada: {nome} nao respondeu ({e}).")
+        return
+    except (KeyError, IndexError, TypeError, AttributeError, ValueError) as e:
+        aviso(f"Auditoria nao realizada: resposta inesperada ({type(e).__name__}: {e}).")
+        return
+    faltam = [c for c, _ in alvo if c not in oficial]
+    comparados = [(c, v, oficial[c]) for c, v in alvo if c in oficial]
+    if not comparados:
+        aviso("Auditoria nao realizada: a resposta nao tem nenhum mes da serie.")
+        return
+    pior = max(comparados, key=lambda t: abs(t[1] - t[2]))
+    divergentes = [t for t in comparados if abs(t[1] - t[2]) > TOLERANCIA_AUDITORIA]
+    print(f"Comparados {len(comparados)} indices; maior diferenca "
+          f"{abs(pior[1] - pior[2]):.2f} em {rotulo(pior[0] // 100, pior[0] % 100)}.")
+    if faltam:
+        aviso(f"{nome} sem " + ", ".join(rotulo(c // 100, c % 100) for c in faltam[:6])
+              + (" ..." if len(faltam) > 6 else "") + "; esses meses nao foram auditados.")
+    if divergentes:
+        for c, v, o in divergentes[:12]:
+            print(f"  {rotulo(c // 100, c % 100):>18}  planilha {v:.2f}  oficial {o:.2f}  "
+                  f"diferenca {v - o:+.2f}")
+        falhar(f"Auditoria: {len(divergentes)} indice(s) diferem do oficial em mais de "
+               f"{TOLERANCIA_AUDITORIA}. Nada foi alterado; corrija a planilha a mao se for o caso.")
+    print(f"Auditoria ok: todos dentro de +-{TOLERANCIA_AUDITORIA} do numero-indice oficial.")
+
+
 def checar_revisoes(serie_baixada, serie_planilha):
     """Compara a variacao baixada com a implicita na planilha nos meses que as
     duas tem. Devolve [(AAAAMM, variacao_planilha, variacao_baixada), ...]."""
@@ -638,6 +765,11 @@ def verificar_ods(caminho, antes, n, ultimo, ultima_linha_nova, grafico_nome):
 # --------------------------------------------------------------------------
 # geracao da pagina HTML
 # --------------------------------------------------------------------------
+def serie_pagina(serie):
+    """Serie que vai para a pagina: a base (junho/1994) seguida da planilha."""
+    return [[MES_BASE, BASE]] + [list(x) for x in serie]
+
+
 def montar_html(serie, meta, pasta_script):
     """Devolve o HTML final (modelo + serie + metadados) ou None se nao der."""
     modelo = os.path.join(pasta_script, MODELO)
@@ -649,7 +781,7 @@ def montar_html(serie, meta, pasta_script):
     with open(modelo, encoding="utf-8") as fh:
         html = fh.read()
 
-    dados = "[" + ",".join(f"[{c},{v:g}]" for c, v in serie) + "]"
+    dados = "[" + ",".join(f"[{c},{v:g}]" for c, v in serie_pagina(serie)) + "]"
     if MARCA_SERIE not in html:
         aviso(f"marcador {MARCA_SERIE} ausente em {MODELO}; "
               "a pagina HTML nao foi gerada.")
@@ -695,6 +827,7 @@ def verificar(caminho_ods, pasta_script, destino=None):
     else:
         for esperado, achado in lacunas([(c // 100, c % 100) for c, _ in serie]):
             erros.append(f"lacuna na planilha: falta {rotulo(*esperado)} (veio {rotulo(*achado)})")
+        erros += checar_indices(serie)
     esperado = montar_html(serie, ler_meta(caminho_ods), pasta_script) if serie else None
     if esperado is None:
         erros.append("nao foi possivel montar a pagina a partir do modelo")
@@ -706,8 +839,8 @@ def verificar(caminho_ods, pasta_script, destino=None):
         if atual != esperado:
             m = re.search(re.escape(MARCA_SERIE) + r"(\[.*?\]);", atual, re.S)
             serie_html = json.loads(m.group(1)) if m else None
-            if serie_html != serie:
-                n = len(serie_html) if serie_html else 0
+            if serie_html != serie_pagina(serie):
+                n = len([c for c, _ in serie_html or [] if c != MES_BASE])
                 erros.append(f"a serie do {os.path.basename(destino)} ({n} meses) "
                              f"difere da planilha ({len(serie)} meses)")
             else:
@@ -741,6 +874,10 @@ def atualizar(caminho_entrada, caminho_saida, fonte=None, simular=False,
     if not linhas:
         falhar("Nao encontrei a serie na planilha (formula =B/base).")
     ultima_linha = max(linhas)
+    divisores = set(re.findall(r'of:=\[\.B\d+\]/([\d.]+)', content))
+    if divisores != {num(BASE)}:
+        falhar(f"Formulas da coluna C com divisor {sorted(divisores)}; esperado so "
+               f"{num(BASE)} (base junho/1994). A planilha precisa ser migrada.")
 
     # ultimo rotulo e ultimo indice
     m = re.search(
@@ -772,12 +909,21 @@ def atualizar(caminho_entrada, caminho_saida, fonte=None, simular=False,
     furos = lacunas([(c // 100, c % 100) for c, _ in serie_planilha])
     if furos:
         falhar(f"A planilha tem lacuna: falta {rotulo(*furos[0][0])}.")
+    problemas = checar_indices(serie_planilha)
+    if problemas:
+        falhar("A planilha tem indices invalidos: " + "; ".join(problemas[:5]))
 
     # ---- baixa, confere e filtra o que falta -------------------------------
     serie, nome_fonte, conferencia, nome_conf = baixar_serie(
         fonte, mes_menos(ultimo_ano, ultimo_mes, JANELA_MESES), conferir_com)
     print(f"Recebidos {len(serie)} meses de {nome_fonte} "
           f"({rotulo(*serie[0][:2])} .. {rotulo(*serie[-1][:2])}).")
+
+    # ---- atualidade e comparacao das fontes nos meses ja gravados ---------
+    cruzar = conferir_com or (not fonte and nome_fonte == FONTE_BCB)
+    checar_atualidade(serie, nome_fonte, conferencia if cruzar else None, nome_conf)
+    if cruzar and conferencia:
+        comparar_janela(serie, nome_fonte, conferencia, nome_conf, (ultimo_ano, ultimo_mes))
 
     for cod, na_planilha, baixada in checar_revisoes(serie, serie_planilha):
         aviso(f"{rotulo(cod // 100, cod % 100)} na planilha = {na_planilha:+.2f}%, "
@@ -797,7 +943,7 @@ def atualizar(caminho_entrada, caminho_saida, fonte=None, simular=False,
 
     # conferencia cruzada: online, so quando a fonte principal foi o BCB;
     # com --fonte, so se --conferir-com foi dado
-    if conferir_com or (not fonte and nome_fonte == FONTE_BCB):
+    if cruzar:
         status_conf = conferir_fontes(faltando, nome_fonte, conferencia, nome_conf)
     elif fonte:
         status_conf = "sem conferencia (fonte informada com --fonte)"
@@ -952,6 +1098,8 @@ def main():
                    help="nao gera a pagina HTML")
     p.add_argument("--conferir-com", default=None, metavar="JSON",
                    help="JSON local (formato do SGS) usado na conferencia cruzada; para testes")
+    p.add_argument("--auditar", action="store_true",
+                   help="compara toda a serie com o numero-indice oficial do IBGE (so reporta)")
     p.add_argument("--verificar", action="store_true",
                    help="so confere se o index.html corresponde a planilha (sai com 1 se nao)")
     p.add_argument("--html", default=None,
@@ -966,6 +1114,9 @@ def main():
 
     if a.verificar:
         verificar(a.entrada, pasta, a.html)
+        return
+    if a.auditar:
+        auditar(a.entrada)
         return
 
     if not a.so_html:

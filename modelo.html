@@ -124,8 +124,8 @@ footer{display:flex;justify-content:space-between;align-items:baseline;gap:24px;
   </header>
 
   <div class="bar">
-    <div class="field"><label for="ini">Início</label><select id="ini"></select></div>
-    <div class="field"><label for="fim">Fim</label><select id="fim"></select></div>
+    <div class="field"><label for="ini" title="A partir do primeiro dia deste mês">Início</label><select id="ini"></select></div>
+    <div class="field"><label for="fim" title="Até o último dia deste mês">Fim</label><select id="fim"></select></div>
     <div class="presets" id="presets"></div>
   </div>
 
@@ -152,13 +152,16 @@ footer{display:flex;justify-content:space-between;align-items:baseline;gap:24px;
 
   <footer>
     <span>Fonte: IPCA/IBGE, obtido via <span id="via">Banco Central (SGS 433)</span><span id="coleta"></span>. Último mês disponível: <span id="ult"></span>.
-      Número-índice da planilha, referência julho/1994 = 915,93 (base dezembro/1993 = 100).</span>
+      Do início do mês inicial ao fim do final, como na calculadora do IBGE; base: índice de junho/1994 = 857,29.</span>
     <!-- Versão da página (SemVer): mudar à mão ao alterar o modelo.html -->
-    <span class="versao" title="Versão da página">v1.1.0</span>
+    <span class="versao" title="Versão da página">v2.0.0</span>
   </footer>
 </div>
 
 <script>
+/* Série [[AAAAMM, número-índice], ...]. O primeiro item (junho/1994) é só a base:
+   um período vai do INÍCIO do mês inicial ao FIM do final, como na calculadora do
+   IBGE, então a conta usa o índice do mês anterior ao início. */
 const S = /*__SERIE__*/[];
 /* Data (AAAA-MM-DD) e fonte da última coleta, lidas das propriedades da planilha */
 const META = /*__META__*/{};
@@ -251,7 +254,7 @@ function grafico(a,b){
   const L=56,R=96,T=14,B=34;
   const PW=caber($("vGraf"),L+R,T+B), PH=PW*NOTA_PROP;   // 100% = altura da cédula inteira
   const W=L+PW+R, H=T+PH+B;
-  const pts=S.slice(a,b+1), base=pts[0][1], n=pts.length;
+  const pts=S.slice(a-1,b+1), base=pts[0][1], n=pts.length;   // pts[0] = início do mês a
   const x=i=>L+PW*(n===1?0:i/(n-1)), y=v=>T+PH*(1-v);
   const vals=pts.map(p=>base/p[1]);
   const d=vals.map((v,i)=>`${i?"L":"M"}${x(i).toFixed(1)} ${y(v).toFixed(1)}`).join(" ");
@@ -269,14 +272,15 @@ function grafico(a,b){
   let eixo="";
   pts.forEach((p,i)=>{
     const m=p[0]%100, yy=Math.floor(p[0]/100);
-    if(n<=24){ if(i%Math.ceil(n/maxRot)===0||i===n-1)
+    // cada ponto i>=1 é o FIM do mês p[0]; o ponto 0 é o início do primeiro mês
+    if(n<=25){ if(i>=1&&((i-1)%Math.ceil((n-1)/maxRot)===0||i===n-1))
       eixo+=`<text x="${x(i)}" y="${H-8}" text-anchor="middle" style="fill:var(--muted);${fonte}">${curto(p[0])}</text>`; }
-    else if(m===1&&yy%passo===0)
-      eixo+=`<line x1="${x(i)}" y1="${y(0)}" x2="${x(i)}" y2="${y(0)+6}" style="stroke:var(--muted)"/><text x="${x(i)}" y="${H-8}" text-anchor="middle" style="fill:var(--muted);${fonte}">${yy}</text>`;
+    else if(m===12&&(yy+1)%passo===0)   // fim de dezembro = início do ano seguinte
+      eixo+=`<line x1="${x(i)}" y1="${y(0)}" x2="${x(i)}" y2="${y(0)+6}" style="stroke:var(--muted)"/><text x="${x(i)}" y="${H-8}" text-anchor="middle" style="fill:var(--muted);${fonte}">${yy+1}</text>`;
   });
   const vf=vals[n-1];
   G={n,x,y,vals,pts,L,PW,W};
-  return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="Poder de compra de ${rotulo(pts[0][0])} a ${rotulo(pts[n-1][0])}: cai de 100% para ${fmt(vf*100)}%">
+  return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="Poder de compra do início de ${rotulo(S[a][0])} ao fim de ${rotulo(pts[n-1][0])}: cai de 100% para ${fmt(vf*100)}%">
     <defs><clipPath id="cSob"><path d="${sob}"/></clipPath><clipPath id="cSobre"><path d="${sobre}"/></clipPath></defs>
     <image href="nota.jpg" x="${L}" y="${T}" width="${PW}" height="${PH}" preserveAspectRatio="none" opacity=".22" filter="url(#cinza)" clip-path="url(#cSobre)"/>
     <image href="nota.jpg" x="${L}" y="${T}" width="${PW}" height="${PH}" preserveAspectRatio="none" clip-path="url(#cSob)"/>
@@ -299,7 +303,7 @@ function hover(e){
   hv.setAttribute("x1",px); hv.setAttribute("x2",px); hv.setAttribute("opacity",".5");
   hc.setAttribute("cx",px); hc.setAttribute("cy",py); hc.setAttribute("opacity","1");
   const t=$("tip"), cb=$("vGraf").getBoundingClientRect();
-  t.textContent=`${curto(G.pts[i][0])} · R$ ${fmt(G.vals[i]*100)}`;
+  t.textContent=i?`fim de ${curto(G.pts[i][0])} · R$ ${fmt(G.vals[i]*100)}`:`início de ${curto(G.pts[1][0])} · R$ 100,00`;
   t.style.left=(r.left-cb.left+px/esc)+"px"; t.style.top=(r.top-cb.top+py/esc)+"px"; t.style.opacity=1;
 }
 function semHover(){
@@ -308,8 +312,8 @@ function semHover(){
   if(s){s.querySelector("#hv").setAttribute("opacity",0);s.querySelector("#hc").setAttribute("opacity",0);}
 }
 
-const sel=(el,def)=>{el.innerHTML=S.map(([c])=>`<option value="${c}">${rotulo(c)}</option>`).join("");el.value=def;};
-sel($("ini"),S[0][0]); sel($("fim"),S[S.length-1][0]);
+const sel=(el,def)=>{el.innerHTML=S.slice(1).map(([c])=>`<option value="${c}">${rotulo(c)}</option>`).join("");el.value=def;};
+sel($("ini"),S[1][0]); sel($("fim"),S[S.length-1][0]);
 $("ult").textContent=rotulo(S[S.length-1][0]);
 if(META.fonte) $("via").textContent=META.fonte;
 if(/^\d{4}-\d{2}-\d{2}$/.test(META.coleta||"")){
@@ -326,20 +330,20 @@ function desenhar(){
 function render(){
   let a=idx(+$("ini").value), b=idx(+$("fim").value);
   if(a>b){[a,b]=[b,a];$("ini").value=S[a][0];$("fim").value=S[b][0];}
-  const ia=S[a][1], ib=S[b][1];
+  const ia=S[a-1][1], ib=S[b][1];         // índice do mês anterior ao início e do fim
   pod=ia/ib;                             // poder de compra restante
   const infl=(ib/ia-1)*100;              // inflação acumulada
-  const meses=(Math.floor(S[b][0]/100)*12+S[b][0]%100)-(Math.floor(S[a][0]/100)*12+S[a][0]%100);
+  const meses=(Math.floor(S[b][0]/100)*12+S[b][0]%100)-(Math.floor(S[a][0]/100)*12+S[a][0]%100)+1;
   const anos=meses/12;
-  const aa=anos>0?(Math.pow(ib/ia,1/anos)-1)*100:0;
+  const aa=(Math.pow(ib/ia,1/anos)-1)*100;
 
-  $("kick").textContent=`R$ 100 de ${curto(S[a][0])} valem em ${curto(S[b][0])}`;
+  $("kick").textContent=`R$ 100 do início de ${curto(S[a][0])} valem no fim de ${curto(S[b][0])}`;
   $("big").innerHTML=`<small>R$</small>${fmt(100*pod)}`;
-  $("verdict").innerHTML=`R$ 100,00 de ${rotulo(S[a][0])} compram em ${rotulo(S[b][0])} só <b>${fmt(pod*100)}%</b> do que compravam lá atrás.`;
+  $("verdict").innerHTML=`R$ 100,00 do início de ${rotulo(S[a][0])} compram no fim de ${rotulo(S[b][0])} só <b>${fmt(pod*100)}%</b> do que compravam no começo.`;
   $("sPer").textContent=(pod<=1?"−":"+")+fmt(Math.abs(1-pod)*100)+"%";
   $("sInf").textContent=(infl>=0?"+":"")+fmt(infl)+"%";
-  $("sDur").textContent=meses<24?meses+" meses":fmt(anos).replace(",00","")+" anos";
-  $("sAno").textContent=meses?(aa>=0?"+":"")+fmt(aa)+"%":"—";
+  $("sDur").textContent=meses===1?"1 mês":meses<24?meses+" meses":fmt(anos).replace(",00","")+" anos";
+  $("sAno").textContent=(aa>=0?"+":"")+fmt(aa)+"%";
   atual=[a,b];
   desenhar();
   marcarPreset();
@@ -347,27 +351,30 @@ function render(){
 
 /* presets de período */
 const ULT=S[S.length-1][0];
+const PRIM=S[1][0];                     // julho/1994: primeiro mês selecionável
 const recua=m=>{let t=Math.floor(ULT/100)*12+ULT%100-m;return Math.floor((t-1)/12)*100+((t-1)%12+1);};
+// "k meses" = os k meses que terminam em ULT, do início de (ULT − k + 1) ao fim de ULT
+const ultimos=k=>{const c=recua(k-1);return [c<PRIM?PRIM:c,ULT];};
 const PRESETS=[
-  ["12 meses",()=>[recua(12),ULT]],
-  ["2 anos",()=>[recua(24),ULT]],
-  ["5 anos",()=>[recua(60),ULT]],
-  ["10 anos",()=>[recua(120),ULT]],
-  ["20 anos",()=>[recua(240),ULT]],
-  ["30 anos",()=>[recua(360),ULT]],
-  ["Desde o Plano Real",()=>[S[0][0],ULT]],
+  ["12 meses",()=>ultimos(12)],
+  ["2 anos",()=>ultimos(24)],
+  ["5 anos",()=>ultimos(60)],
+  ["10 anos",()=>ultimos(120)],
+  ["20 anos",()=>ultimos(240)],
+  ["30 anos",()=>ultimos(360)],
+  ["Desde o Plano Real",()=>[PRIM,ULT]],
 ];
 $("presets").innerHTML=PRESETS.map((p,i)=>`<button type="button" data-i="${i}" aria-pressed="false">${p[0]}</button>`).join("");
 $("presets").addEventListener("click",e=>{
   const bt=e.target.closest("button"); if(!bt) return;
   const [i,f]=PRESETS[+bt.dataset.i][1]();
-  $("ini").value=(idx(i)>=0?i:S[0][0]); $("fim").value=f; render();
+  $("ini").value=i; $("fim").value=f; render();
 });
 function marcarPreset(){
   const at=[+$("ini").value,+$("fim").value];
   document.querySelectorAll("#presets button").forEach((bt,k)=>{
     const [i,f]=PRESETS[k][1]();
-    bt.setAttribute("aria-pressed", String((idx(i)>=0?i:S[0][0])===at[0] && f===at[1]));
+    bt.setAttribute("aria-pressed", String(i===at[0] && f===at[1]));
   });
 }
 $("ini").addEventListener("change",render);
