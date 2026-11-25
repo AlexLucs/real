@@ -26,6 +26,15 @@ jobs:
         with:
           python-version: '3.12'
 
+      # Testes do script (sem rede, sobre cópias temporárias). Se falharem,
+      # nada é atualizado nem commitado.
+      - name: Testes
+        shell: bash
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'   # sem __pycache__, que o "git add -A" levaria
+        run: |
+          python -m unittest discover -s testes -v
+
       # "shell: bash" explícito faz o Actions usar "bash -eo pipefail":
       # sem isso, uma falha do Python dentro do "| tee" passaria em silêncio.
       - name: Rodar o atualizador
@@ -55,3 +64,13 @@ jobs:
           git add -A
           git commit -m "IPCA ${MES:-atualizado}"
           git push
+
+      # Compara toda a série com o número-índice oficial do IBGE (variável 2266).
+      # Só reporta: divergência deixa este passo vermelho, mas não desfaz o
+      # commit nem impede o job de terminar; IBGE fora do ar gera só aviso.
+      - name: Auditar contra o índice oficial do IBGE
+        if: always()
+        continue-on-error: true
+        shell: bash
+        run: |
+          python atualizar_ipca.py --auditar
