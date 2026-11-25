@@ -285,20 +285,38 @@ class TestAuditoria(Base):
         cod, out = self.auditar(self.oficial((A.MES_BASE, 0.10)))
         self.assertEqual(cod, 1, out)
 
-    def test_ibge_fora_e_incompleta(self):
+    def test_ibge_fora_e_indisponivel(self):
         cod, out = self.auditar(None)
         self.assertEqual(cod, 2, out)
         self.assertIn("Auditoria nao realizada", out)
 
     def test_falta_mes_antigo_e_incompleta(self):
         cod, out = self.auditar(self.oficial(sem=(200001,)))
-        self.assertEqual(cod, 2, out)
+        self.assertEqual(cod, 3, out)
         self.assertIn("Auditoria incompleta", out)
 
     def test_falta_so_o_ultimo_mes_aprova(self):
         cod, out = self.auditar(self.oficial(sem=(self.serie[-1][0],)))
         self.assertEqual(cod, 0, out)
         self.assertIn("nao foi auditado", out)
+
+    def test_resposta_inesperada_e_incompleta(self):
+        cod, out = self.auditar({"erro": "formato novo"})
+        self.assertEqual(cod, 3, out)
+        self.assertIn("resposta inesperada", out)
+
+    def test_resposta_sem_nenhum_mes_e_incompleta(self):
+        cod, out = self.auditar([{"resultados": [{"series": [{"serie": {}}]}]}])
+        self.assertEqual(cod, 3, out)
+
+    def test_incompleta_gera_anotacao_de_erro_no_actions(self):
+        A.NO_ACTIONS = True
+        try:
+            cod, out = self.auditar(self.oficial(sem=(200001,)))
+        finally:
+            A.NO_ACTIONS = False
+        self.assertEqual(cod, 3, out)
+        self.assertIn("::error title=Atualizar IPCA::Auditoria incompleta", out)
 
     def test_divergencia_prevalece_sobre_mes_ausente(self):
         cod, out = self.auditar(self.oficial((200001, 0.05), sem=(200002,)))
