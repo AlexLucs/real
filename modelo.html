@@ -2,199 +2,332 @@
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Quanto vale o Real</title>
+<script>
+/* Aplica o tema salvo antes de pintar, para não piscar. Valores: auto | light | dark */
+try{const t=localStorage.getItem("tema");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t;}catch(e){}
+</script>
 <style>
 /* Fontes locais (pasta fonts/, licença SIL OFL) para a página funcionar offline */
 @font-face{font-family:"Archivo";font-weight:500;font-display:swap;src:url(fonts/archivo-latin-500-normal.woff2) format("woff2")}
-@font-face{font-family:"Archivo";font-weight:600;font-display:swap;src:url(fonts/archivo-latin-600-normal.woff2) format("woff2")}
 @font-face{font-family:"Archivo";font-weight:800;font-display:swap;src:url(fonts/archivo-latin-800-normal.woff2) format("woff2")}
 @font-face{font-family:"IBM Plex Mono";font-weight:400;font-display:swap;src:url(fonts/ibm-plex-mono-latin-400-normal.woff2) format("woff2")}
 @font-face{font-family:"IBM Plex Mono";font-weight:600;font-display:swap;src:url(fonts/ibm-plex-mono-latin-600-normal.woff2) format("woff2")}
+@font-face{font-family:"Fraunces";font-weight:500;font-display:swap;src:url(fonts/fraunces-latin-500-normal.woff2) format("woff2")}
+@font-face{font-family:"Fraunces";font-weight:800;font-display:swap;src:url(fonts/fraunces-latin-800-normal.woff2) format("woff2")}
+@font-face{font-family:"Fraunces";font-weight:900;font-display:swap;src:url(fonts/fraunces-latin-900-normal.woff2) format("woff2")}
+@font-face{font-family:"JetBrains Mono";font-weight:400;font-display:swap;src:url(fonts/jetbrains-mono-latin-400-normal.woff2) format("woff2")}
+@font-face{font-family:"JetBrains Mono";font-weight:600;font-display:swap;src:url(fonts/jetbrains-mono-latin-600-normal.woff2) format("woff2")}
+@font-face{font-family:"JetBrains Mono";font-weight:700;font-display:swap;src:url(fonts/jetbrains-mono-latin-700-normal.woff2) format("woff2")}
 
-body{margin:0;font:14px system-ui;}img{max-width:100%}[hidden]{display:none!important}
-
-/* Layout: cedula encolhendo no topo, controles de periodo, curva embaixo */
+/* Tema claro = proposta A "Cédula": Archivo + IBM Plex Mono, verde-água + coral */
 :root{
-  --bg:#f3f1ea; --surface:#fffdf7; --ink:#1c1a15; --muted:#6e6a5d;
-  --line:#ded9c9; --note:#2f6b4f; --note-2:#8fb79a; --note-ink:#e8f0e4; --alert:#a8422c;
+  --bg:#eef3f1; --surface:#ffffff; --ink:#10201d; --muted:#5d716c; --line:#d3dfdb;
+  --alert:#d9452b;
   --display:"Archivo",system-ui,sans-serif; --mono:"IBM Plex Mono",ui-monospace,monospace;
+  --big-weight:800; color-scheme:light;
 }
+/* Tema escuro = proposta B "Editorial": Fraunces + JetBrains Mono */
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
-  --bg:#13140f; --surface:#1c1e18; --ink:#eceade; --muted:#9a9686;
-  --line:#32352b; --note:#3f8a65; --note-2:#6c9c7e; --note-ink:#f0f6ec; --alert:#d4745a;
-  color-scheme:dark}}
+  --bg:#17140f; --surface:#201c15; --ink:#f0e9db; --muted:#a3977f; --line:#352e23;
+  --alert:#ef5b4c;
+  --display:"Fraunces",Georgia,serif; --mono:"JetBrains Mono",ui-monospace,monospace;
+  --big-weight:900; color-scheme:dark}}
 :root[data-theme="dark"]{
-  --bg:#13140f; --surface:#1c1e18; --ink:#eceade; --muted:#9a9686;
-  --line:#32352b; --note:#3f8a65; --note-2:#6c9c7e; --note-ink:#f0f6ec; --alert:#d4745a;
-  color-scheme:dark}
+  --bg:#17140f; --surface:#201c15; --ink:#f0e9db; --muted:#a3977f; --line:#352e23;
+  --alert:#ef5b4c;
+  --display:"Fraunces",Georgia,serif; --mono:"JetBrains Mono",ui-monospace,monospace;
+  --big-weight:900; color-scheme:dark}
 
-body{background:var(--bg);color:var(--ink);font-family:var(--display);margin:0}
-.wrap{max-width:900px;margin:0 auto;padding-inline:20px;padding-block:28px 48px;
-  display:flex;flex-direction:column;gap:26px}
-h1{font-size:clamp(26px,5vw,40px);font-weight:800;letter-spacing:-.02em;margin:0;text-wrap:balance}
-.sub{color:var(--muted);font-size:15px;margin:6px 0 0;max-width:62ch;line-height:1.5}
+/* Layout para telas de 1920 px ou maiores, sem rolagem:
+   cabeçalho / controles / [resumo | palco com a cédula ou o gráfico] / fonte */
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--ink);font:500 15px/1.45 var(--display);min-width:1500px}
+[hidden]{display:none!important}
+.app{display:flex;flex-direction:column;gap:16px;height:100vh;padding:26px 40px 20px}
 
-.stage{background:var(--surface);border:1px solid var(--line);border-radius:14px;
-  padding:22px 20px 18px;display:flex;flex-direction:column;gap:16px}
-.notes{display:flex;align-items:flex-end;justify-content:center;gap:clamp(14px,5vw,48px);
-  min-height:200px;flex-wrap:wrap}
-.slot{display:flex;flex-direction:column;align-items:center;gap:10px;min-width:0}
-.slot svg{display:block;max-width:100%;transition:width .5s cubic-bezier(.3,.9,.3,1),height .5s cubic-bezier(.3,.9,.3,1)}
-.cap{font-family:var(--mono);font-size:12px;color:var(--muted);text-align:center;line-height:1.4}
-.cap b{display:block;font-size:14px;color:var(--ink);font-weight:600;letter-spacing:.02em}
-.verdict{text-align:center;font-size:clamp(17px,3.2vw,22px);line-height:1.45;margin:0;text-wrap:balance}
-.verdict strong{color:var(--alert);font-variant-numeric:tabular-nums}
+.top{display:flex;align-items:center;gap:28px}
+h1{font-size:clamp(30px,1.7vw,46px);font-weight:800;letter-spacing:-.02em;margin:0;line-height:1.05}
+.sub{color:var(--muted);margin:4px 0 0;font-size:clamp(14px,.8vw,18px)}
+.tabs{display:flex;gap:4px;margin-left:auto;background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:4px}
+.tabs button{border:0;background:transparent;font-size:clamp(16px,.9vw,20px);padding:12px 24px}
+.tabs button[aria-selected="true"]{background:var(--alert);color:#fff}
 
-.controls{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end}
-.field{display:flex;flex-direction:column;gap:5px;min-width:0;flex:1 1 150px}
-label{font-size:11px;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);font-weight:600}
-select{font:600 14px var(--mono);color:var(--ink);background:var(--surface);
-  border:1px solid var(--line);border-radius:8px;padding:9px 10px;width:100%}
-.presets{display:flex;flex-wrap:wrap;gap:8px}
-button{font:600 12px var(--mono);color:var(--muted);background:transparent;
-  border:1px solid var(--line);border-radius:999px;padding:7px 13px;cursor:pointer}
+.bar{display:flex;flex-wrap:wrap;align-items:end;gap:10px 18px}
+.field{display:flex;flex-direction:column;gap:4px}
+label{font:600 11px var(--mono);text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+select{font:600 16px var(--mono);color:var(--ink);background:var(--surface);border:1px solid var(--line);
+  border-radius:9px;padding:10px 12px;min-width:230px}
+.presets{display:flex;flex-wrap:wrap;gap:8px;margin-left:auto}
+.presets button{font-size:clamp(15px,.85vw,19px);padding:11px 20px}
+button{font:600 12.5px var(--mono);color:var(--muted);background:var(--surface);border:1px solid var(--line);
+  border-radius:999px;padding:8px 13px;cursor:pointer}
 button:hover{color:var(--ink);border-color:var(--muted)}
-button[aria-pressed="true"]{background:var(--note);border-color:var(--note);color:var(--note-ink)}
-:focus-visible{outline:2px solid var(--note);outline-offset:2px}
+.presets button[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:var(--bg)}
+#tema{display:flex;align-items:center;gap:7px;white-space:nowrap}
+#tema svg{width:15px;height:15px}
+:focus-visible{outline:2px solid var(--alert);outline-offset:2px}
 
-.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:1px;
-  background:var(--line);border:1px solid var(--line);border-radius:12px;overflow:hidden}
-.stat{background:var(--surface);padding:13px 15px}
-.stat span{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
-.stat strong{display:block;font:600 21px/1.2 var(--mono);margin-top:4px;font-variant-numeric:tabular-nums}
-.chartbox{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px}
-.chartbox svg{display:block;width:100%;height:auto}
-footer{color:var(--muted);font-size:12.5px;line-height:1.6}
-@media (prefers-reduced-motion:reduce){.slot svg{transition:none}}
+.body{flex:1;min-height:0;display:grid;grid-template-columns:clamp(360px,19vw,540px) minmax(0,1fr);gap:20px}
+
+/* Resumo à esquerda: o valor que sobrou e os números do período */
+.side{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:26px 26px 22px;
+  display:flex;flex-direction:column;gap:20px;min-height:0}
+.kicker{font:600 12px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:0}
+.big{font:var(--big-weight) clamp(84px,5.2vw,150px)/.9 var(--display);color:var(--alert);margin:10px 0 0;
+  letter-spacing:-.04em;font-variant-numeric:tabular-nums;white-space:nowrap}
+.big small{font-size:.38em;letter-spacing:0;margin-right:.12em;vertical-align:1.05em}
+.stats{margin-top:auto;display:flex;flex-direction:column}
+.stat{padding:12px 0;border-top:1px solid var(--line)}
+.stat span{display:block;font:600 11px var(--mono);text-transform:uppercase;letter-spacing:.07em;color:var(--muted)}
+.stat strong{display:block;font:600 clamp(24px,1.4vw,36px)/1.2 var(--mono);margin-top:2px;font-variant-numeric:tabular-nums}
+.stat.hot strong{color:var(--alert)}
+
+/* Palco à direita: troca entre a cédula cortada e o gráfico */
+.stage{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:22px 26px 18px;
+  display:flex;flex-direction:column;gap:14px;min-height:0;min-width:0}
+.view{flex:1;min-height:0;position:relative;display:flex;justify-content:center;align-items:center}
+.view svg{display:block}
+.verdict{margin:0;font-size:clamp(17px,1vw,22px)}
+.verdict b{color:var(--alert)}
+.cut .keep{transition:width .7s cubic-bezier(.3,.9,.3,1)}
+.cut text{font-family:var(--mono);font-weight:600}
+.tip{position:absolute;pointer-events:none;background:var(--ink);color:var(--bg);font:600 13px/1.4 var(--mono);
+  padding:7px 10px;border-radius:8px;white-space:nowrap;transform:translate(-50%,-125%);opacity:0;transition:opacity .12s}
+
+footer{color:var(--muted);font-size:clamp(12px,.68vw,15px);line-height:1.5}
+@media (prefers-reduced-motion:reduce){.cut .keep{transition:none}}
 </style>
 </head>
 <body>
 
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <filter id="cinza"><feColorMatrix type="saturate" values="0"/></filter>
+</defs></svg>
 
-<div class="wrap">
-<header>
-  <h1>Quanto vale o Real</h1>
-  <p class="sub">Cada nota abaixo tem a área proporcional ao poder de compra. A da esquerda é o dinheiro no início do período; a da direita, o que sobrou dele no fim. Série do IPCA, julho de 1994 em diante.</p>
-</header>
+<div class="app">
+  <header class="top">
+    <div>
+      <h1>Quanto vale o Real</h1>
+      <p class="sub">Poder de compra de R$ 100 ao longo do tempo, corrigido pelo IPCA.</p>
+    </div>
+    <div class="tabs" role="tablist" aria-label="Visualização">
+      <button type="button" role="tab" id="tNota" aria-controls="vNota" data-v="nota">Cédula cortada</button>
+      <button type="button" role="tab" id="tGraf" aria-controls="vGraf" data-v="grafico">Gráfico no tempo</button>
+    </div>
+    <button type="button" id="tema" aria-live="polite"></button>
+  </header>
 
-<section class="stage">
-  <div class="notes">
-    <div class="slot"><div id="noteA"></div><p class="cap"><b id="labA">—</b><span id="valA">—</span></p></div>
-    <div class="slot"><div id="noteB"></div><p class="cap"><b id="labB">—</b><span id="valB">—</span></p></div>
+  <div class="bar">
+    <div class="field"><label for="ini">Início</label><select id="ini"></select></div>
+    <div class="field"><label for="fim">Fim</label><select id="fim"></select></div>
+    <div class="presets" id="presets"></div>
   </div>
-  <p class="verdict" id="verdict"></p>
-</section>
 
-<section class="controls">
-  <div class="field"><label for="ini">Início</label><select id="ini"></select></div>
-  <div class="field"><label for="fim">Fim</label><select id="fim"></select></div>
-</section>
-<div class="presets" id="presets"></div>
+  <div class="body">
+    <aside class="side">
+      <div>
+        <p class="kicker" id="kick">—</p>
+        <p class="big" id="big">—</p>
+      </div>
+      <div class="stats">
+        <div class="stat hot"><span>Poder de compra perdido</span><strong id="sPer">—</strong></div>
+        <div class="stat"><span>Inflação acumulada</span><strong id="sInf">—</strong></div>
+        <div class="stat"><span>Duração</span><strong id="sDur">—</strong></div>
+        <div class="stat"><span>Média ao ano</span><strong id="sAno">—</strong></div>
+      </div>
+    </aside>
 
-<div class="stats">
-  <div class="stat"><span>Poder de compra</span><strong id="sPod">—</strong></div>
-  <div class="stat"><span>Inflação no período</span><strong id="sInf">—</strong></div>
-  <div class="stat"><span>Duração</span><strong id="sDur">—</strong></div>
-  <div class="stat"><span>Média ao ano</span><strong id="sAno">—</strong></div>
-</div>
+    <section class="stage">
+      <div class="view cut" id="vNota" role="tabpanel" aria-labelledby="tNota"></div>
+      <div class="view" id="vGraf" role="tabpanel" aria-labelledby="tGraf"><div id="chart"></div><div class="tip" id="tip"></div></div>
+      <p class="verdict" id="verdict"></p>
+    </section>
+  </div>
 
-<div class="chartbox"><div id="chart"></div></div>
-
-<footer>Fonte: IPCA / IBGE, via série 433 do SGS do Banco Central. Último mês disponível: <span id="ult"></span>. O índice usado é o número-índice da planilha, referência julho/1994 = 915,93 (índice com base dezembro/1993 = 100).</footer>
+  <footer>Fonte: IPCA/IBGE, série 433 do SGS do Banco Central. Último mês disponível: <span id="ult"></span>.
+    Número-índice da planilha, referência julho/1994 = 915,93 (base dezembro/1993 = 100).</footer>
 </div>
 
 <script>
 const S = /*__SERIE__*/[];
 
 const MES=["janeiro","fevereiro","março","abril","maio","junho","julho","agosto","setembro","outubro","novembro","dezembro"];
+const MC=["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];
 const fmt=n=>n.toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2});
 const rotulo=c=>MES[c%100-1]+" de "+Math.floor(c/100);
-const curto=c=>String(c%100).padStart(2,"0")+"/"+Math.floor(c/100);
-
-const sel=(el,def)=>{el.innerHTML=S.map(([c])=>`<option value="${c}">${rotulo(c)}</option>`).join("");el.value=def;};
+const curto=c=>MC[c%100-1]+"/"+Math.floor(c/100);
 const $=id=>document.getElementById(id);
-sel($("ini"),S[0][0]); sel($("fim"),S[S.length-1][0]);
-$("ult").textContent=rotulo(S[S.length-1][0]);
-
 const idx=c=>S.findIndex(r=>r[0]===c);
 
-// Proporção de nota.jpg (573x253 px). Usada para não distorcer a cédula.
-const NOTA_PROP=253/573;
+// Proporção de nota.jpg (1536x672 px). Cédula cortada e área do gráfico usam exatamente essa proporção.
+const NOTA_W=1536, NOTA_H=672, NOTA_PROP=NOTA_H/NOTA_W;
 
-function nota(ratio,valor,dim){
-  const W=300,H=Math.round(W*NOTA_PROP);   // 300x132: mesma proporção da imagem
-  const s=Math.max(Math.sqrt(ratio),0.045);
-  const w=Math.round(W*s), h=Math.round(H*s);
-  const id=dim?"b":"a";
-  // a imagem ocupa exatamente o retângulo do recorte (moldura de 3 px)
-  return `<svg viewBox="0 0 ${W} ${H}" width="${w}" height="${h}" role="img" aria-label="Cédula representando R$ ${fmt(valor)}">
-    <defs><clipPath id="cp${id}"><rect x="3" y="3" width="${W-6}" height="${H-6}" rx="8"/></clipPath></defs>
-    <g clip-path="url(#cp${id})">
-      <image href="nota.jpg" x="3" y="3" width="${W-6}" height="${H-6}" preserveAspectRatio="xMidYMid slice"/>
+/* ---- tema: automático -> claro -> escuro ---- */
+const TEMAS=["auto","light","dark"];
+const NOME={auto:"Automático",light:"Claro",dark:"Escuro"};
+const ICONE={
+  auto:'<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.5a6.5 6.5 0 0 1 0 13z" fill="currentColor"/></svg>',
+  light:'<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="3.2" fill="currentColor"/><g stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M8 .8v2M8 13.2v2M.8 8h2M13.2 8h2M2.9 2.9l1.4 1.4M11.7 11.7l1.4 1.4M2.9 13.1l1.4-1.4M11.7 4.3l1.4-1.4"/></g></svg>',
+  dark:'<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 10.2A6 6 0 0 1 5.8 2.5a6 6 0 1 0 7.7 7.7z" fill="currentColor"/></svg>'
+};
+let tema=document.documentElement.dataset.theme||"auto";
+function mostrarTema(){
+  const prox=TEMAS[(TEMAS.indexOf(tema)+1)%3];
+  $("tema").innerHTML=ICONE[tema]+NOME[tema];
+  $("tema").setAttribute("aria-label",`Tema: ${NOME[tema]}. Mudar para ${NOME[prox]}`);
+  $("tema").title=`Mudar para ${NOME[prox]}`;
+}
+$("tema").addEventListener("click",()=>{
+  tema=TEMAS[(TEMAS.indexOf(tema)+1)%3];
+  if(tema==="auto") delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme=tema;
+  try{localStorage.setItem("tema",tema);}catch(e){}
+  mostrarTema();
+});
+mostrarTema();
+
+/* ---- abas: cédula cortada | gráfico. A aba fica no endereço (#nota ou #grafico). ---- */
+let vista=location.hash==="#grafico"?"grafico":"nota";
+function mostrarVista(){
+  const g=vista==="grafico";
+  $("vNota").hidden=g; $("vGraf").hidden=!g;
+  $("tNota").setAttribute("aria-selected",String(!g)); $("tGraf").setAttribute("aria-selected",String(g));
+  desenhar();
+}
+document.querySelector(".tabs").addEventListener("click",e=>{
+  const bt=e.target.closest("button"); if(!bt) return;
+  vista=bt.dataset.v; history.replaceState(null,"","#"+vista); mostrarVista();
+});
+
+/* Maior retângulo com a proporção da cédula que cabe na caixa (descontando margens) */
+function caber(box,mx,my){
+  const w=box.clientWidth-mx, h=box.clientHeight-my;
+  return Math.max(200,Math.min(w,h/NOTA_PROP));
+}
+
+/* ---- cédula cortada: a parte que sobrou em cores, a perdida desbotada (cinza claro).
+   Comparação linear (largura), mais fácil de ler que área ---- */
+function cortada(p){
+  const PW=caber($("vNota"),0,34), PH=PW*NOTA_PROP, esc=PW/573;   // escala dos textos: 1 = nota de 573 px
+  const k=Math.max(p,.004)*PW, perdido=(1-p)*100, fs=Math.round(46*esc), fl=Math.min(18,Math.max(14,Math.round(18*esc)));
+  const img=`<image href="nota.jpg" x="0" y="0" width="${PW}" height="${PH}" preserveAspectRatio="none"/>`;
+  const rotPerda=p<.7
+    ?`<text x="${(k+PW)/2}" y="${PH/2+fs*.35}" text-anchor="middle" style="fill:var(--alert);font-size:${fs}px">−${fmt(perdido)}%</text>`
+    :(()=>{ // corte perto da borda direita: rótulo numa etiqueta sobre a parte que sobrou
+        const txt=`−${fmt(perdido)}%`, lw=txt.length*fs*.62+fs*.8, lh=fs*1.4, lx=k-20-lw, ly=PH/2-lh/2;
+        return `<rect x="${lx}" y="${ly}" width="${lw}" height="${lh}" rx="${lh/2}" style="fill:var(--surface)" opacity=".94"/>
+          <text x="${lx+lw/2}" y="${PH/2+fs*.35}" text-anchor="middle" style="fill:var(--alert);font-size:${fs}px">${txt}</text>`;})();
+  return `<svg width="${PW}" height="${PH+34}" viewBox="0 -4 ${PW} ${PH+34}" overflow="visible" role="img" aria-label="Da cédula de R$ 100 sobra ${fmt(p*100)}% do poder de compra">
+    <defs>
+      <clipPath id="cpNota"><rect width="${PW}" height="${PH}" rx="${14*esc}"/></clipPath>
+      <clipPath id="cpKeep"><rect class="keep" x="0" y="0" width="${k.toFixed(1)}" height="${PH}"/></clipPath>
+    </defs>
+    <g clip-path="url(#cpNota)">
+      <g opacity=".22" filter="url(#cinza)">${img}</g>
+      <g clip-path="url(#cpKeep)">${img}</g>
     </g>
-    <rect x="3" y="3" width="${W-6}" height="${H-6}" rx="8" fill="none"
-      stroke="${dim?"var(--alert)":"var(--note-2)"}" stroke-width="3"/>
+    <rect x="1" y="1" width="${PW-2}" height="${PH-2}" rx="${14*esc}" fill="none" style="stroke:var(--muted)" stroke-dasharray="8 7" opacity=".6"/>
+    <line x1="${k}" y1="-4" x2="${k}" y2="${PH+4}" style="stroke:var(--alert)" stroke-width="4"/>
+    ${rotPerda}
+    <text x="0" y="${PH+26}" style="fill:var(--muted);font-size:${fl}px">◀ o que ainda compra</text>
+    <text x="${PW}" y="${PH+26}" text-anchor="end" style="fill:var(--alert);font-size:${fl}px">o que a inflação levou ▶</text>
   </svg>`;
 }
 
+/* ---- gráfico: cédula em cores sob a curva, desbotada acima dela. Eixo Y fixo de 0 a 100%. ---- */
+let G=null;
 function grafico(a,b){
-  // A área de plotagem tem a proporção da cédula: 100% no eixo Y = cédula inteira.
-  const W=860,L=52,R=14,T=16,B=30;
-  const PW=W-L-R, PH=Math.round(PW*NOTA_PROP);   // 794 x 351
-  const H=T+PH+B;
-  const pts=S.slice(a,b+1);
-  const base=pts[0][1];
-  const n=pts.length;
-  const x=i=>L+PW*(n===1?0:i/(n-1));
-  const y=v=>T+PH*(1-v);
+  const L=56,R=96,T=14,B=34;
+  const PW=caber($("vGraf"),L+R,T+B), PH=PW*NOTA_PROP;   // 100% = altura da cédula inteira
+  const W=L+PW+R, H=T+PH+B;
+  const pts=S.slice(a,b+1), base=pts[0][1], n=pts.length;
+  const x=i=>L+PW*(n===1?0:i/(n-1)), y=v=>T+PH*(1-v);
   const vals=pts.map(p=>base/p[1]);
   const d=vals.map((v,i)=>`${i?"L":"M"}${x(i).toFixed(1)} ${y(v).toFixed(1)}`).join(" ");
-  const area=d+` L${x(n-1).toFixed(1)} ${y(0)} L${x(0).toFixed(1)} ${y(0)} Z`;
-  // Escala fixa de 0 a 100%: é a altura da cédula, por isso não faz zoom.
-  let grade="",rotulos="";
+  const sob=d+` L${x(n-1)} ${y(0)} L${x(0)} ${y(0)} Z`;
+  const sobre=d+` L${x(n-1)} ${y(1)} L${x(0)} ${y(1)} Z`;
+  const fonte="font:13px var(--mono)";
+  let grade="",rot="";
   for(const t of [0,.25,.5,.75,1]){
-    grade+=`<line x1="${L}" y1="${y(t)}" x2="${W-R}" y2="${y(t)}" stroke="var(--muted)" stroke-width="1" opacity=".35"/>`;
-    rotulos+=`<text x="${L-8}" y="${y(t)+4}" text-anchor="end" fill="var(--muted)" font-family="IBM Plex Mono,monospace" font-size="11">${Math.round(t*100)}%</text>`;
+    grade+=`<line x1="${L}" y1="${y(t)}" x2="${L+PW}" y2="${y(t)}" style="stroke:var(--ink)" opacity=".15"/>`;
+    rot+=`<text x="${L-10}" y="${y(t)+4}" text-anchor="end" style="fill:var(--muted);${fonte}">${t*100}%</text>`;
   }
-  const marcas=n>1?[0,Math.floor((n-1)/2),n-1]:[0];
-  const eixo=marcas.map(i=>`<text x="${x(i).toFixed(1)}" y="${H-8}" text-anchor="${i===0?"start":i===n-1?"end":"middle"}" fill="var(--muted)" font-family="IBM Plex Mono,monospace" font-size="11">${curto(pts[i][0])}</text>`).join("");
-  const desc=`Poder de compra de ${rotulo(pts[0][0])} a ${rotulo(pts[n-1][0])}: cai de 100% para ${fmt(vals[n-1]*100)}%`;
-  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${desc}">
-    <defs>
-      <clipPath id="recorteArea"><path d="${area}"/></clipPath>
-    </defs>
-    ${rotulos}
-    <image href="nota.jpg" x="${L}" y="${T}" width="${PW}" height="${PH}"
-           preserveAspectRatio="none" clip-path="url(#recorteArea)"/>
-    ${grade}
-    <path d="${d}" fill="none" stroke="var(--alert)" stroke-width="2.5" stroke-linejoin="round"/>
-    <circle cx="${x(n-1).toFixed(1)}" cy="${y(vals[n-1]).toFixed(1)}" r="4.5" fill="var(--alert)"/>
+  // eixo X: meses nos períodos curtos, anos "redondos" nos longos
+  const maxRot=Math.max(3,Math.min(12,Math.floor(PW/95))), anos=(n-1)/12;
+  const passo=[1,2,4,5,8,10].find(s=>anos/s<=maxRot)||10;
+  let eixo="";
+  pts.forEach((p,i)=>{
+    const m=p[0]%100, yy=Math.floor(p[0]/100);
+    if(n<=24){ if(i%Math.ceil(n/maxRot)===0||i===n-1)
+      eixo+=`<text x="${x(i)}" y="${H-8}" text-anchor="middle" style="fill:var(--muted);${fonte}">${curto(p[0])}</text>`; }
+    else if(m===1&&yy%passo===0)
+      eixo+=`<line x1="${x(i)}" y1="${y(0)}" x2="${x(i)}" y2="${y(0)+6}" style="stroke:var(--muted)"/><text x="${x(i)}" y="${H-8}" text-anchor="middle" style="fill:var(--muted);${fonte}">${yy}</text>`;
+  });
+  const vf=vals[n-1];
+  G={n,x,y,vals,pts,L,PW,W};
+  return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="Poder de compra de ${rotulo(pts[0][0])} a ${rotulo(pts[n-1][0])}: cai de 100% para ${fmt(vf*100)}%">
+    <defs><clipPath id="cSob"><path d="${sob}"/></clipPath><clipPath id="cSobre"><path d="${sobre}"/></clipPath></defs>
+    <image href="nota.jpg" x="${L}" y="${T}" width="${PW}" height="${PH}" preserveAspectRatio="none" opacity=".22" filter="url(#cinza)" clip-path="url(#cSobre)"/>
+    <image href="nota.jpg" x="${L}" y="${T}" width="${PW}" height="${PH}" preserveAspectRatio="none" clip-path="url(#cSob)"/>
+    ${grade}${rot}
+    ${vf<.8?`<text x="${L+PW-16}" y="${T+30}" text-anchor="end" style="fill:var(--alert);font:700 17px var(--mono)">perdido para a inflação</text>`:""}
+    <path d="${d}" fill="none" style="stroke:var(--alert)" stroke-width="3.5" stroke-linejoin="round"/>
+    <circle cx="${x(n-1)}" cy="${y(vf)}" r="7" style="fill:var(--alert);stroke:var(--surface)" stroke-width="3"/>
+    <text x="${x(n-1)+14}" y="${y(vf)+6}" style="fill:var(--alert);font:700 17px var(--mono)">${fmt(vf*100)}%</text>
+    <line id="hv" x1="0" x2="0" y1="${T}" y2="${y(0)}" style="stroke:var(--ink)" stroke-dasharray="3 3" opacity="0"/>
+    <circle id="hc" r="6" style="fill:var(--surface);stroke:var(--alert)" stroke-width="3" opacity="0"/>
     ${eixo}
   </svg>`;
 }
+function hover(e){
+  const svg=$("chart").querySelector("svg"); if(!G||!svg) return;
+  const r=svg.getBoundingClientRect(), esc=G.W/r.width, mx=(e.clientX-r.left)*esc;
+  const i=Math.max(0,Math.min(G.n-1,Math.round((mx-G.L)/G.PW*(G.n-1))));
+  const px=G.x(i), py=G.y(G.vals[i]);
+  const hv=svg.querySelector("#hv"), hc=svg.querySelector("#hc");
+  hv.setAttribute("x1",px); hv.setAttribute("x2",px); hv.setAttribute("opacity",".5");
+  hc.setAttribute("cx",px); hc.setAttribute("cy",py); hc.setAttribute("opacity","1");
+  const t=$("tip"), cb=$("vGraf").getBoundingClientRect();
+  t.textContent=`${curto(G.pts[i][0])} · R$ ${fmt(G.vals[i]*100)}`;
+  t.style.left=(r.left-cb.left+px/esc)+"px"; t.style.top=(r.top-cb.top+py/esc)+"px"; t.style.opacity=1;
+}
+function semHover(){
+  $("tip").style.opacity=0;
+  const s=$("chart").querySelector("svg");
+  if(s){s.querySelector("#hv").setAttribute("opacity",0);s.querySelector("#hc").setAttribute("opacity",0);}
+}
 
+const sel=(el,def)=>{el.innerHTML=S.map(([c])=>`<option value="${c}">${rotulo(c)}</option>`).join("");el.value=def;};
+sel($("ini"),S[0][0]); sel($("fim"),S[S.length-1][0]);
+$("ult").textContent=rotulo(S[S.length-1][0]);
+
+let atual=null, pod=1;
+function desenhar(){
+  if(!atual) return;
+  if(vista==="grafico") $("chart").innerHTML=grafico(...atual);
+  else $("vNota").innerHTML=cortada(pod);
+}
 function render(){
   let a=idx(+$("ini").value), b=idx(+$("fim").value);
   if(a>b){[a,b]=[b,a];$("ini").value=S[a][0];$("fim").value=S[b][0];}
   const ia=S[a][1], ib=S[b][1];
-  const pod=ia/ib;                       // poder de compra restante
+  pod=ia/ib;                             // poder de compra restante
   const infl=(ib/ia-1)*100;              // inflação acumulada
   const meses=(Math.floor(S[b][0]/100)*12+S[b][0]%100)-(Math.floor(S[a][0]/100)*12+S[a][0]%100);
   const anos=meses/12;
   const aa=anos>0?(Math.pow(ib/ia,1/anos)-1)*100:0;
 
-  $("noteA").innerHTML=nota(1,100,false);
-  $("noteB").innerHTML=nota(pod,100*pod,true);
-  $("labA").textContent=rotulo(S[a][0]); $("valA").textContent="R$ 100,00";
-  $("labB").textContent=rotulo(S[b][0]); $("valB").textContent="poder de R$ "+fmt(100*pod);
-
-  $("verdict").innerHTML=`R$ 100,00 de ${rotulo(S[a][0])} compram em ${rotulo(S[b][0])} o mesmo que <strong>R$ ${fmt(100*pod)}</strong> compravam lá atrás.`;
-  $("sPod").textContent=fmt(pod*100)+"%";
+  $("kick").textContent=`R$ 100 de ${curto(S[a][0])} valem em ${curto(S[b][0])}`;
+  $("big").innerHTML=`<small>R$</small>${fmt(100*pod)}`;
+  $("verdict").innerHTML=`R$ 100,00 de ${rotulo(S[a][0])} compram em ${rotulo(S[b][0])} só <b>${fmt(pod*100)}%</b> do que compravam lá atrás.`;
+  $("sPer").textContent=(pod<=1?"−":"+")+fmt(Math.abs(1-pod)*100)+"%";
   $("sInf").textContent=(infl>=0?"+":"")+fmt(infl)+"%";
   $("sDur").textContent=meses<24?meses+" meses":fmt(anos).replace(",00","")+" anos";
   $("sAno").textContent=meses?(aa>=0?"+":"")+fmt(aa)+"%":"—";
-  $("chart").innerHTML=grafico(a,b);
+  atual=[a,b];
+  desenhar();
   marcarPreset();
 }
 
@@ -212,20 +345,24 @@ const PRESETS=[
 ];
 $("presets").innerHTML=PRESETS.map((p,i)=>`<button type="button" data-i="${i}" aria-pressed="false">${p[0]}</button>`).join("");
 $("presets").addEventListener("click",e=>{
-  const b=e.target.closest("button"); if(!b) return;
-  const [i,f]=PRESETS[+b.dataset.i][1]();
+  const bt=e.target.closest("button"); if(!bt) return;
+  const [i,f]=PRESETS[+bt.dataset.i][1]();
   $("ini").value=(idx(i)>=0?i:S[0][0]); $("fim").value=f; render();
 });
 function marcarPreset(){
-  const atual=[+$("ini").value,+$("fim").value];
-  document.querySelectorAll("#presets button").forEach((b,k)=>{
+  const at=[+$("ini").value,+$("fim").value];
+  document.querySelectorAll("#presets button").forEach((bt,k)=>{
     const [i,f]=PRESETS[k][1]();
-    b.setAttribute("aria-pressed", String((idx(i)>=0?i:S[0][0])===atual[0] && f===atual[1]));
+    bt.setAttribute("aria-pressed", String((idx(i)>=0?i:S[0][0])===at[0] && f===at[1]));
   });
 }
 $("ini").addEventListener("change",render);
 $("fim").addEventListener("change",render);
+$("vGraf").addEventListener("mousemove",hover);
+$("vGraf").addEventListener("mouseleave",semHover);
+addEventListener("resize",desenhar);
 render();
+mostrarVista();
 </script>
 
 </body>
