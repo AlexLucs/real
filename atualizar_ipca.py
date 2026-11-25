@@ -63,7 +63,9 @@ Checagens
 - A serie da planilha precisa ter indices finitos e positivos, comecar em
   julho/1994 e ter variacoes plausiveis; tambem conferido no --verificar.
 - --auditar baixa o numero-indice oficial (tabela 1737, variavel 2266) de
-  junho/1994 em diante e compara um a um (tolerancia 0,015). So reporta.
+  junho/1994 em diante e compara um a um (tolerancia 0,015). Nunca corrige.
+  Sai com 0 (aprovada; pode faltar so o ultimo mes), 1 (divergencia) ou 2
+  (incompleta: IBGE fora do ar, resposta inesperada ou mes antigo ausente).
 - O .ods novo e gravado num temporario e conferido (XML bem-formado, serie
   relida, formulas e valores das colunas C e D das linhas novas, caixa de
   texto com o mes e o valor final, linhas, intervalos e pontos do grafico)
@@ -469,9 +471,21 @@ def checar_indices(serie):
     return erros
 
 
+AUDITORIA_OK, AUDITORIA_DIVERGENTE, AUDITORIA_INCOMPLETA = 0, 1, 2
+
+
+def incompleta(msg):
+    """Auditoria que nao pode ser concluida: aviso e codigo 2 (o workflow segue)."""
+    aviso(msg)
+    sys.exit(AUDITORIA_INCOMPLETA)
+
+
 def auditar(caminho_ods):
     """Compara toda a serie (e a BASE) com o numero-indice oficial do IBGE.
-    So reporta. Divergencia sai com codigo 1; IBGE indisponivel, so aviso."""
+    Nunca corrige nada. Codigos de saida:
+      0 = aprovada (todos os meses dentro da tolerancia; pode faltar so o ultimo);
+      1 = divergencia acima da tolerancia (o workflow nao publica);
+      2 = incompleta: IBGE indisponivel, resposta inesperada ou falta mes antigo."""
     alvo = serie_pagina(ler_serie(caminho_ods))
     ini, fim = alvo[0][0], alvo[-1][0]
     nome = "IBGE (tabela 1737, variavel 2266)"
@@ -480,29 +494,30 @@ def auditar(caminho_ods):
         oficial = {a * 100 + me: v
                    for a, me, v in ler_ibge(baixar_json(URL_IBGE_INDICE.format(ini=ini, fim=fim)))}
     except FalhaDownload as e:
-        aviso(f"Auditoria nao realizada: {nome} nao respondeu ({e}).")
-        return
+        incompleta(f"Auditoria nao realizada: {nome} nao respondeu ({e}).")
     except (KeyError, IndexError, TypeError, AttributeError, ValueError) as e:
-        aviso(f"Auditoria nao realizada: resposta inesperada ({type(e).__name__}: {e}).")
-        return
+        incompleta(f"Auditoria nao realizada: resposta inesperada ({type(e).__name__}: {e}).")
     faltam = [c for c, _ in alvo if c not in oficial]
     comparados = [(c, v, oficial[c]) for c, v in alvo if c in oficial]
     if not comparados:
-        aviso("Auditoria nao realizada: a resposta nao tem nenhum mes da serie.")
-        return
+        incompleta("Auditoria nao realizada: a resposta nao tem nenhum mes da serie.")
     pior = max(comparados, key=lambda t: abs(t[1] - t[2]))
     divergentes = [t for t in comparados if abs(t[1] - t[2]) > TOLERANCIA_AUDITORIA]
     print(f"Comparados {len(comparados)} indices; maior diferenca "
           f"{abs(pior[1] - pior[2]):.2f} em {rotulo(pior[0] // 100, pior[0] % 100)}.")
-    if faltam:
-        aviso(f"{nome} sem " + ", ".join(rotulo(c // 100, c % 100) for c in faltam[:6])
-              + (" ..." if len(faltam) > 6 else "") + "; esses meses nao foram auditados.")
+    antigos = [c for c in faltam if c != fim]       # o ultimo mes pode so nao ter saido ainda
+    if fim in faltam:
+        aviso(f"{nome} ainda sem {rotulo(fim // 100, fim % 100)}; esse mes nao foi auditado.")
     if divergentes:
         for c, v, o in divergentes[:12]:
             print(f"  {rotulo(c // 100, c % 100):>18}  planilha {v:.2f}  oficial {o:.2f}  "
                   f"diferenca {v - o:+.2f}")
         falhar(f"Auditoria: {len(divergentes)} indice(s) diferem do oficial em mais de "
                f"{TOLERANCIA_AUDITORIA}. Nada foi alterado; corrija a planilha a mao se for o caso.")
+    if antigos:
+        incompleta(f"Auditoria incompleta: {nome} sem "
+                   + ", ".join(rotulo(c // 100, c % 100) for c in antigos[:6])
+                   + (" ..." if len(antigos) > 6 else "") + "; a serie nao foi auditada por inteiro.")
     print(f"Auditoria ok: todos dentro de +-{TOLERANCIA_AUDITORIA} do numero-indice oficial.")
 
 

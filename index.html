@@ -138,7 +138,7 @@ footer{display:flex;justify-content:space-between;align-items:baseline;gap:24px;
         <p class="big" id="big">—</p>
       </div>
       <div class="stats">
-        <div class="stat hot"><span>Poder de compra perdido</span><strong id="sPer">—</strong></div>
+        <div class="stat hot"><span id="lPer">Poder de compra perdido</span><strong id="sPer">—</strong></div>
         <div class="stat"><span>Inflação acumulada</span><strong id="sInf">—</strong></div>
         <div class="stat"><span>Duração</span><strong id="sDur">—</strong></div>
         <div class="stat"><span>Média ao ano</span><strong id="sAno">—</strong></div>
@@ -153,10 +153,10 @@ footer{display:flex;justify-content:space-between;align-items:baseline;gap:24px;
   </div>
 
   <footer>
-    <span>Fonte: IPCA/IBGE, obtido via <span id="via">Banco Central (SGS 433)</span><span id="coleta"></span>. Último mês disponível: <span id="ult"></span>.
+    <span>Fonte: IPCA/IBGE<span id="via">; fonte da última coleta não registrada</span><span id="coleta"></span>. Último mês disponível: <span id="ult"></span>.
       Do início do mês inicial ao fim do final, como na calculadora do IBGE; base: índice de junho/1994 = 857,29.</span>
     <!-- Versão da página (SemVer): mudar à mão ao alterar o modelo.html -->
-    <span class="versao" title="Versão da página">v2.0.2</span>
+    <span class="versao" title="Versão da página">v2.0.3</span>
   </footer>
 </div>
 
@@ -317,7 +317,7 @@ function semHover(){
 const sel=(el,def)=>{el.innerHTML=S.slice(1).map(([c])=>`<option value="${c}">${rotulo(c)}</option>`).join("");el.value=def;};
 sel($("ini"),S[1][0]); sel($("fim"),S[S.length-1][0]);
 $("ult").textContent=rotulo(S[S.length-1][0]);
-if(META.fonte) $("via").textContent=META.fonte;
+if(META.fonte) $("via").textContent=", obtido via "+META.fonte;   // sem registro, não presume a fonte
 if(/^\d{4}-\d{2}-\d{2}$/.test(META.coleta||"")){
   const [y,m,d]=META.coleta.split("-");
   $("coleta").textContent=`, coletado em ${d}/${m}/${y}`;
@@ -341,7 +341,9 @@ function render(){
 
   $("kick").textContent=`R$ 100 do início de ${curto(S[a][0])} valem no fim de ${curto(S[b][0])}`;
   $("big").innerHTML=`<small>R$</small>${fmt(100*pod)}`;
-  $("verdict").innerHTML=`R$ 100,00 do início de ${rotulo(S[a][0])} compram no fim de ${rotulo(S[b][0])} só <b>${fmt(pod*100)}%</b> do que compravam no começo.`;
+  const ganho=pod>1;                     // deflação no período
+  $("verdict").innerHTML=`R$ 100,00 do início de ${rotulo(S[a][0])} compram no fim de ${rotulo(S[b][0])} ${ganho?"":"só "}<b>${fmt(pod*100)}%</b> do que compravam no começo.`;
+  $("lPer").textContent=ganho?"Poder de compra ganho":"Poder de compra perdido";
   $("sPer").textContent=(pod<=1?"−":"+")+fmt(Math.abs(1-pod)*100)+"%";
   $("sInf").textContent=(infl>=0?"+":"")+fmt(infl)+"%";
   $("sDur").textContent=meses===1?"1 mês":meses<24?meses+" meses":fmt(anos).replace(",00","")+" anos";
